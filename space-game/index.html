@@ -13,35 +13,47 @@
 
     <canvas id="gameCanvas"></canvas>
 
+    <!-- إشعار الانتقال بين المراحل -->
+    <div id="stageBanner" class="stage-banner hidden">
+        <span id="stageBannerTag" class="stage-tag">مرحلة جديدة</span>
+        <h2 id="stageBannerTitle" class="stage-title">المرحلة 1</h2>
+        <p id="stageBannerDesc" class="stage-desc">أجواء هادئة وبداية المعركة</p>
+    </div>
+
     <!-- شريط المعلومات العلوي أثناء اللعب -->
     <div id="hud" class="hidden">
-        <div class="hud-group">
-            <div class="hud-box">
-                <span class="hud-label">النقاط</span>
-                <span id="scoreDisplay" class="hud-value">0</span>
-            </div>
-            <div class="hud-box">
-                <span class="hud-label">المستوى</span>
-                <span id="levelDisplay" class="hud-value">1</span>
-            </div>
-        </div>
-        <div class="hud-group">
-            <div class="hud-box health-box">
-                <span class="hud-label">الدرع</span>
-                <div class="health-bar-bg">
-                    <div id="healthBar" class="health-bar-fill"></div>
+        <div class="hud-top-row">
+            <div class="hud-group">
+                <div class="hud-box">
+                    <span class="hud-label">النقاط</span>
+                    <span id="scoreDisplay" class="hud-value">0</span>
+                </div>
+                <div class="hud-box stage-hud-box">
+                    <span class="hud-label">المرحلة</span>
+                    <span id="stageDisplay" class="hud-value">1 • السديم النيون</span>
                 </div>
             </div>
-            <button id="pauseBtn" class="icon-btn" title="إيقاف مؤقت / الإعدادات">⚙️</button>
+            <div class="hud-group">
+                <div class="hud-box health-box">
+                    <span class="hud-label">الدرع</span>
+                    <div class="health-bar-bg">
+                        <div id="healthBar" class="health-bar-fill"></div>
+                    </div>
+                </div>
+                <button id="pauseBtn" class="icon-btn" title="إيقاف مؤقت / الإعدادات">⚙️</button>
+            </div>
         </div>
+
+        <!-- مؤشرات التعزيزات النشطة والوقت المتبقي لكل منها -->
+        <div id="activeBuffs" class="buffs-bar hidden"></div>
     </div>
 
     <!-- شاشة البداية -->
     <div id="startScreen" class="overlay">
         <div class="card">
-            <div class="badge">لعبة أركيد</div>
+            <div class="badge">لعبة أركيد • مراحل متطورة</div>
             <h1 class="game-title">حرب الفضاء</h1>
-            <p class="game-subtitle">دافع عن المجرة ودمر أساطيل النيازك والمركبات المعادية</p>
+            <p class="game-subtitle">دافع عن المجرة عبر مراحل متصاعدة وتغيرات كاملة في الأجواء والأعداء</p>
             
             <div class="high-score-pill">
                 <span>أعلى نتيجة:</span>
