@@ -3,13 +3,19 @@ const ctx = canvas.getContext('2d');
 
 // عناصر الواجهة
 const hud = document.getElementById('hud');
+const activeBuffsEl = document.getElementById('activeBuffs');
 const startScreen = document.getElementById('startScreen');
 const settingsModal = document.getElementById('settingsModal');
 const aboutModal = document.getElementById('aboutModal');
 const gameOverScreen = document.getElementById('gameOverScreen');
 
+const stageBanner = document.getElementById('stageBanner');
+const stageBannerTag = document.getElementById('stageBannerTag');
+const stageBannerTitle = document.getElementById('stageBannerTitle');
+const stageBannerDesc = document.getElementById('stageBannerDesc');
+
 const scoreDisplay = document.getElementById('scoreDisplay');
-const levelDisplay = document.getElementById('levelDisplay');
+const stageDisplay = document.getElementById('stageDisplay');
 const healthBar = document.getElementById('healthBar');
 const highScoreStart = document.getElementById('highScoreStart');
 const highScoreEnd = document.getElementById('highScoreEnd');
@@ -36,9 +42,11 @@ let scaleFactor = 1;
 
 let gameState = 'START'; // START, PLAYING, PAUSED, GAMEOVER
 let previousStateBeforeModal = 'START';
+let pausedAt = 0;
+let bannerHideTimeout = null;
 
 let score = 0;
-let level = 1;
+let stage = 1;
 let highScore = 0;
 
 try {
@@ -55,10 +63,124 @@ const settings = {
 };
 
 const difficultyConfig = {
-    easy: { spawnRate: 1300, enemySpeedMult: 0.78, enemyHpMult: 0.8 },
-    normal: { spawnRate: 950, enemySpeedMult: 1.0, enemyHpMult: 1.0 },
+    easy: { spawnRate: 1320, enemySpeedMult: 0.78, enemyHpMult: 0.8 },
+    normal: { spawnRate: 960, enemySpeedMult: 1.0, enemyHpMult: 1.0 },
     hard: { spawnRate: 680, enemySpeedMult: 1.32, enemyHpMult: 1.3 }
 };
+
+// تعريف المراحل (كل مرحلة تغيّر الأجواء والألوان وأشكال الأعداء وقوتهم)
+const STAGE_THEMES = [
+    {
+        name: 'السديم النيون',
+        tag: 'المرحلة 1 • بداية هادئة',
+        desc: 'أجواء سماوية وبنفسجية هادئة مع أسراب خفيفة',
+        bgTop: '#060913',
+        bgBottom: '#0c1633',
+        nebulaColor: 'rgba(0, 242, 254, 0.11)',
+        accentColor: '#00f2fe',
+        starSpeedMult: 1.0,
+        spawnMult: 1.0,
+        speedMult: 1.0,
+        hpMult: 1.0,
+        enemyFireChance: 0.0,
+        colors: { scout: '#38bdf8', asteroid: '#f59e0b', tank: '#818cf8', striker: '#22d3ee' }
+    },
+    {
+        name: 'عاصفة النيازك',
+        tag: 'المرحلة 2 • حرارة وتصاعد',
+        desc: 'غبار ناري ونيازك أسرع مع هجمات متفرعة',
+        bgTop: '#12070c',
+        bgBottom: '#2b100e',
+        nebulaColor: 'rgba(249, 115, 22, 0.14)',
+        accentColor: '#fb923c',
+        starSpeedMult: 1.45,
+        spawnMult: 0.84,
+        speedMult: 1.18,
+        hpMult: 1.35,
+        enemyFireChance: 0.22,
+        colors: { scout: '#fb7185', asteroid: '#f97316', tank: '#ef4444', striker: '#fbbf24' }
+    },
+    {
+        name: 'المدار القرمزي',
+        tag: 'المرحلة 3 • ضغط عالٍ',
+        desc: 'أجواء قرمزية حادة ومناورات أسرع وطلقات معادية',
+        bgTop: '#140512',
+        bgBottom: '#2d0924',
+        nebulaColor: 'rgba(244, 63, 94, 0.15)',
+        accentColor: '#f43f5e',
+        starSpeedMult: 1.85,
+        spawnMult: 0.72,
+        speedMult: 1.34,
+        hpMult: 1.75,
+        enemyFireChance: 0.38,
+        colors: { scout: '#f43f5e', asteroid: '#e11d48', tank: '#c026d3', striker: '#fda4af' }
+    },
+    {
+        name: 'قلب المجرة الذهبي',
+        tag: 'المرحلة 4 • ذروة المعركة',
+        desc: 'طاقة ذهبية زمردية وأعداء شديدو التحمل',
+        bgTop: '#071210',
+        bgBottom: '#162614',
+        nebulaColor: 'rgba(251, 191, 36, 0.14)',
+        accentColor: '#fbbf24',
+        starSpeedMult: 2.2,
+        spawnMult: 0.62,
+        speedMult: 1.48,
+        hpMult: 2.2,
+        enemyFireChance: 0.52,
+        colors: { scout: '#34d399', asteroid: '#fbbf24', tank: '#f59e0b', striker: '#a3e635' }
+    }
+];
+
+function getStageConfig(stageNum) {
+    const idx = (stageNum - 1) % STAGE_THEMES.length;
+    const cycle = Math.floor((stageNum - 1) / STAGE_THEMES.length);
+    const base = STAGE_THEMES[idx];
+    const extraScale = 1 + cycle * 0.35;
+
+    return {
+        ...base,
+        stageNum,
+        label: cycle > 0 ? `${base.name} (دورة ${cycle + 1})` : base.name,
+        tag: cycle > 0 ? `المرحلة ${stageNum} • دورة متقدمة ${cycle + 1}` : base.tag,
+        spawnMult: Math.max(0.42, base.spawnMult * Math.pow(0.92, cycle)),
+        speedMult: base.speedMult * (1 + cycle * 0.12),
+        hpMult: base.hpMult * extraScale,
+        enemyFireChance: Math.min(0.75, base.enemyFireChance + cycle * 0.08)
+    };
+}
+
+function showStageBanner(cfg) {
+    stageBannerTag.textContent = cfg.tag;
+    stageBannerTitle.textContent = `المرحلة ${cfg.stageNum}: ${cfg.label}`;
+    stageBannerDesc.textContent = cfg.desc;
+    stageBanner.style.borderColor = cfg.accentColor;
+    stageBannerTag.style.color = cfg.accentColor;
+    stageBanner.classList.remove('hidden');
+
+    if (bannerHideTimeout) clearTimeout(bannerHideTimeout);
+    bannerHideTimeout = setTimeout(() => {
+        stageBanner.classList.add('hidden');
+    }, 2300);
+}
+
+function syncStage(now, announce = true) {
+    const newStage = Math.floor(score / 250) + 1;
+    if (newStage !== stage) {
+        stage = newStage;
+        const cfg = getStageConfig(stage);
+        stageDisplay.textContent = `${stage} • ${cfg.label}`;
+        stageDisplay.style.color = cfg.accentColor;
+        if (announce) {
+            playSound('stageup');
+            showStageBanner(cfg);
+        }
+    } else {
+        const cfg = getStageConfig(stage);
+        stageDisplay.textContent = `${stage} • ${cfg.label}`;
+        stageDisplay.style.color = cfg.accentColor;
+    }
+}
 
 // نظام الصوت الآمن (Web Audio API)
 let audioCtx = null;
@@ -119,6 +241,14 @@ function playSound(type) {
             gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
             osc.start(now);
             osc.stop(now + 0.2);
+        } else if (type === 'stageup') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(340, now);
+            osc.frequency.exponentialRampToValueAtTime(760, now + 0.32);
+            gain.gain.setValueAtTime(0.14, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+            osc.start(now);
+            osc.stop(now + 0.32);
         }
     } catch (e) {}
 }
@@ -134,10 +264,14 @@ const player = {
     lastShot: 0,
     fireRate: 210,
     weaponLevel: 1,
-    weaponTimer: 0
+    weaponTimer: 0,
+    weaponDuration: 9000,
+    shieldTimer: 0,
+    shieldDuration: 8000
 };
 
 let bullets = [];
+let enemyBullets = [];
 let enemies = [];
 let particles = [];
 let stars = [];
@@ -156,7 +290,7 @@ function resizeCanvas() {
     player.speed = 6.5 * Math.min(scaleFactor, 1.25);
 
     player.x = Math.max(player.radius + 10, Math.min(width - player.radius - 10, player.x));
-    player.y = Math.max(70, Math.min(height - player.radius - 55, player.y));
+    player.y = Math.max(95, Math.min(height - player.radius - 55, player.y));
 
     if (stars.length === 0) {
         initStars();
@@ -211,7 +345,7 @@ window.addEventListener('pointerup', () => {
 function movePlayerToPointer(clientX, clientY, isTouch) {
     const offsetY = isTouch ? 45 * scaleFactor : 0;
     player.x = Math.max(player.radius + 8, Math.min(width - player.radius - 8, clientX));
-    player.y = Math.max(75, Math.min(height - player.radius - 55, clientY - offsetY));
+    player.y = Math.max(95, Math.min(height - player.radius - 55, clientY - offsetY));
 }
 
 // إطلاق النار
@@ -236,36 +370,47 @@ function fireBullet(now) {
     }
 }
 
-// توليد الأعداء
-function spawnEnemy() {
+// توليد الأعداء بأشكال وقوى تتغير حسب المرحلة
+function spawnEnemy(now) {
     const cfg = difficultyConfig[settings.difficulty];
+    const stg = getStageConfig(stage);
     const rand = Math.random();
+
     let type = 'scout';
     let radius = 18 * scaleFactor;
-    let hp = Math.ceil((1 + Math.floor(level * 0.3)) * cfg.enemyHpMult);
-    let speed = (2.4 + Math.random() * 1.4 + level * 0.15) * cfg.enemySpeedMult * Math.min(scaleFactor, 1.2);
-    let color = '#f43f5e';
+    let baseHp = 1 + Math.floor((stage - 1) * 0.6);
+    let speed = (2.3 + Math.random() * 1.2 + stage * 0.14) * cfg.enemySpeedMult * stg.speedMult * Math.min(scaleFactor, 1.2);
+    let color = stg.colors.scout;
     let points = 10;
 
-    if (rand > 0.78) {
+    if (stage >= 2 && rand > 0.82) {
+        type = 'striker';
+        radius = 19 * scaleFactor;
+        baseHp = 2 + Math.floor(stage * 0.7);
+        speed *= 0.92;
+        color = stg.colors.striker;
+        points = 25;
+    } else if (rand > 0.72) {
         type = 'tank';
         radius = 27 * scaleFactor;
-        hp = Math.ceil((3 + Math.floor(level * 0.5)) * cfg.enemyHpMult);
+        baseHp = 3 + Math.floor(stage * 1.1);
         speed *= 0.65;
-        color = '#a855f7';
-        points = 30;
-    } else if (rand > 0.52) {
+        color = stg.colors.tank;
+        points = 35;
+    } else if (rand > 0.46) {
         type = 'asteroid';
         radius = (20 + Math.random() * 10) * scaleFactor;
-        hp = Math.ceil(2 * cfg.enemyHpMult);
+        baseHp = 2 + Math.floor((stage - 1) * 0.5);
         speed *= 0.85;
-        color = '#f59e0b';
+        color = stg.colors.asteroid;
         points = 20;
     }
 
+    const hp = Math.max(1, Math.ceil(baseHp * cfg.enemyHpMult * stg.hpMult));
+
     enemies.push({
-        x: Math.random() * (width - radius * 2 - 20) + radius + 10,
-        y: -radius - 10,
+        x: Math.random() * (width - radius * 2 - 24) + radius + 12,
+        y: -radius - 16,
         radius,
         hp,
         maxHp: hp,
@@ -274,7 +419,11 @@ function spawnEnemy() {
         color,
         points,
         angle: 0,
-        spin: (Math.random() - 0.5) * 0.06
+        spin: (Math.random() - 0.5) * 0.06,
+        swayAmp: type === 'striker' ? (24 + Math.random() * 18) * scaleFactor : 0,
+        swayFreq: 0.003 + Math.random() * 0.002,
+        phase: Math.random() * Math.PI * 2,
+        lastEnemyShot: now + Math.random() * 900
     });
 }
 
@@ -295,11 +444,60 @@ function createExplosion(x, y, color, count = 14) {
     }
 }
 
+// تحديث واجهة المؤقتات العلوية للتعزيزات
+function updateBuffsUI(now) {
+    const buffs = [];
+
+    if (player.weaponLevel > 1 && player.weaponTimer > now) {
+        const rem = player.weaponTimer - now;
+        const pct = Math.max(0, Math.min(100, (rem / player.weaponDuration) * 100));
+        buffs.push({
+            label: player.weaponLevel === 3 ? '⚡ سلاح ثلاثي' : '⚡ سلاح مزدوج',
+            sec: (rem / 1000).toFixed(1) + 's',
+            pct,
+            color: player.weaponLevel === 3 ? '#fbbf24' : '#38bdf8'
+        });
+    }
+
+    if (player.shieldTimer > now) {
+        const rem = player.shieldTimer - now;
+        const pct = Math.max(0, Math.min(100, (rem / player.shieldDuration) * 100));
+        buffs.push({
+            label: '🛡️ درع طاقة',
+            sec: (rem / 1000).toFixed(1) + 's',
+            pct,
+            color: '#34d399'
+        });
+    }
+
+    if (buffs.length === 0) {
+        activeBuffsEl.classList.add('hidden');
+        activeBuffsEl.innerHTML = '';
+        return;
+    }
+
+    activeBuffsEl.classList.remove('hidden');
+    activeBuffsEl.innerHTML = buffs.map(b => `
+        <div class="buff-pill" style="border-color: ${b.color}55;">
+            <div class="buff-header">
+                <span>${b.label}</span>
+                <span class="buff-time">${b.sec}</span>
+            </div>
+            <div class="buff-track">
+                <div class="buff-fill" style="width: ${b.pct}%; background: ${b.color};"></div>
+            </div>
+        </div>
+    `).join('');
+}
+
 // تحديث منطق اللعبة
 function update(now) {
-    // تحريك النجوم في الخلفية دائماً
+    const stg = getStageConfig(stage);
+
+    // تحريك النجوم في الخلفية
     for (let s of stars) {
-        s.y += s.speed * (gameState === 'PLAYING' ? 1.5 : 0.6);
+        const speedMult = gameState === 'PLAYING' ? 1.5 * stg.starSpeedMult : 0.6;
+        s.y += s.speed * speedMult;
         if (s.y > height) {
             s.y = 0;
             s.x = Math.random() * width;
@@ -315,33 +513,56 @@ function update(now) {
     if (keys['ArrowDown'] || keys['KeyS']) player.y += player.speed;
 
     player.x = Math.max(player.radius + 8, Math.min(width - player.radius - 8, player.x));
-    player.y = Math.max(75, Math.min(height - player.radius - 55, player.y));
+    player.y = Math.max(95, Math.min(height - player.radius - 55, player.y));
 
     // إطلاق النار
     if (settings.autoFire || keys['Space'] || isPointerDown) {
         fireBullet(now);
     }
 
-    // مؤقت تطوير السلاح
+    // انتهاء مؤقتات التعزيزات
     if (player.weaponLevel > 1 && now > player.weaponTimer) {
         player.weaponLevel = 1;
     }
+    if (player.shieldTimer > 0 && now > player.shieldTimer) {
+        player.shieldTimer = 0;
+    }
+    updateBuffsUI(now);
 
     // توليد الأعداء
     const cfg = difficultyConfig[settings.difficulty];
-    const currentSpawnInterval = Math.max(340, cfg.spawnRate - level * 35);
+    const currentSpawnInterval = Math.max(300, cfg.spawnRate * stg.spawnMult);
     if (now - lastEnemySpawn > currentSpawnInterval) {
-        spawnEnemy();
+        spawnEnemy(now);
         lastEnemySpawn = now;
     }
 
-    // تحديث الرصاص
+    // تحديث رصاص اللاعب
     for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i];
         b.x += b.vx;
         b.y += b.vy;
         if (b.y < -20 || b.x < -20 || b.x > width + 20) {
             bullets.splice(i, 1);
+        }
+    }
+
+    // تحديث طلقات الأعداء
+    for (let i = enemyBullets.length - 1; i >= 0; i--) {
+        const eb = enemyBullets[i];
+        eb.x += eb.vx;
+        eb.y += eb.vy;
+
+        if (Math.hypot(player.x - eb.x, player.y - eb.y) < player.radius + eb.r - 2) {
+            enemyBullets.splice(i, 1);
+            playSound('hit');
+            createExplosion(eb.x, eb.y, eb.color, 8);
+            damagePlayer(12);
+            continue;
+        }
+
+        if (eb.y > height + 25 || eb.x < -25 || eb.x > width + 25) {
+            enemyBullets.splice(i, 1);
         }
     }
 
@@ -355,10 +576,13 @@ function update(now) {
             if (p.kind === 'health') {
                 player.hp = Math.min(player.maxHp, player.hp + 30);
                 updateHealthUI();
+            } else if (p.kind === 'shield') {
+                player.shieldTimer = now + player.shieldDuration;
             } else {
                 player.weaponLevel = Math.min(3, player.weaponLevel + 1);
-                player.weaponTimer = now + 9000;
+                player.weaponTimer = now + player.weaponDuration;
             }
+            updateBuffsUI(now);
             createExplosion(p.x, p.y, '#10b981', 10);
             powerups.splice(i, 1);
             continue;
@@ -371,6 +595,30 @@ function update(now) {
         const e = enemies[i];
         e.y += e.speed;
         e.angle += e.spin;
+
+        if (e.swayAmp > 0) {
+            e.x += Math.cos(now * e.swayFreq + e.phase) * 1.4;
+            e.x = Math.max(e.radius + 12, Math.min(width - e.radius - 12, e.x));
+        }
+
+        // إطلاق نار من بعض الأعداء في المراحل المتقدمة
+        if (stg.enemyFireChance > 0 && (e.type === 'tank' || e.type === 'striker') && e.y > 40 && e.y < height * 0.65) {
+            if (now - e.lastEnemyShot > 1750) {
+                e.lastEnemyShot = now;
+                if (Math.random() < stg.enemyFireChance) {
+                    const ang = Math.atan2(player.y - e.y, player.x - e.x);
+                    const spd = 4.2 * Math.min(scaleFactor, 1.2);
+                    enemyBullets.push({
+                        x: e.x,
+                        y: e.y + e.radius * 0.6,
+                        vx: Math.cos(ang) * spd,
+                        vy: Math.sin(ang) * spd,
+                        r: 4.5 * scaleFactor,
+                        color: stg.accentColor
+                    });
+                }
+            }
+        }
 
         // تصادم الرصاص مع العدو
         let destroyed = false;
@@ -386,15 +634,16 @@ function update(now) {
                     createExplosion(e.x, e.y, e.color, 16);
                     score += e.points;
                     scoreDisplay.textContent = score;
-                    level = Math.floor(score / 250) + 1;
-                    levelDisplay.textContent = level;
+                    syncStage(now, true);
 
-                    if (Math.random() < 0.14) {
+                    if (Math.random() < 0.18) {
+                        const rKind = Math.random();
+                        const kind = rKind < 0.36 ? 'health' : (rKind < 0.68 ? 'weapon' : 'shield');
                         powerups.push({
                             x: e.x,
                             y: e.y,
                             radius: 13 * scaleFactor,
-                            kind: Math.random() < 0.5 ? 'health' : 'weapon'
+                            kind
                         });
                     }
 
@@ -415,7 +664,7 @@ function update(now) {
             continue;
         }
 
-        if (e.y > height + e.radius + 20) {
+        if (e.y > height + e.radius + 24) {
             enemies.splice(i, 1);
         }
     }
@@ -431,6 +680,7 @@ function update(now) {
 }
 
 function damagePlayer(amount) {
+    if (player.shieldTimer > performance.now()) return;
     player.hp = Math.max(0, player.hp - amount);
     updateHealthUI();
     if (player.hp <= 0) {
@@ -450,9 +700,45 @@ function updateHealthUI() {
     }
 }
 
+// رسم عداد حياة العدو فوقه مباشرة
+function drawEnemyHealthBar(e) {
+    const barW = Math.max(30 * scaleFactor, e.radius * 1.65);
+    const barH = 5 * scaleFactor;
+    const x = e.x - barW / 2;
+    const y = e.y - e.radius - 15 * scaleFactor;
+    const pct = Math.max(0, Math.min(1, e.hp / e.maxHp));
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(4, 7, 17, 0.78)';
+    ctx.fillRect(x - 1, y - 1, barW + 2, barH + 2);
+
+    ctx.fillStyle = pct > 0.5 ? '#22c55e' : (pct > 0.25 ? '#f59e0b' : '#ef4444');
+    ctx.fillRect(x, y, barW * pct, barH);
+
+    ctx.font = `bold ${Math.max(10, Math.round(10.5 * scaleFactor))}px Cairo`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(`${e.hp}`, e.x, y - 2);
+    ctx.restore();
+}
+
 // رسم العناصر
-function draw() {
-    ctx.fillStyle = '#060913';
+function draw(now) {
+    const stg = getStageConfig(stage);
+
+    // خلفية متدرجة حسب المرحلة
+    const grad = ctx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, stg.bgTop);
+    grad.addColorStop(1, stg.bgBottom);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    // توهج سديمي خفيف يعطي طابع كل مرحلة
+    const neb = ctx.createRadialGradient(width * 0.5, height * 0.35, 20, width * 0.5, height * 0.35, Math.max(width, height) * 0.65);
+    neb.addColorStop(0, stg.nebulaColor);
+    neb.addColorStop(1, 'transparent');
+    ctx.fillStyle = neb;
     ctx.fillRect(0, 0, width, height);
 
     // النجوم
@@ -469,9 +755,11 @@ function draw() {
     for (let p of powerups) {
         ctx.save();
         ctx.translate(p.x, p.y);
-        ctx.fillStyle = p.kind === 'health' ? '#10b981' : '#fbbf24';
+        const pColor = p.kind === 'health' ? '#10b981' : (p.kind === 'shield' ? '#34d399' : '#fbbf24');
+        const pIcon = p.kind === 'health' ? '+' : (p.kind === 'shield' ? '🛡️' : '⚡');
+        ctx.fillStyle = pColor;
         ctx.shadowBlur = 12;
-        ctx.shadowColor = ctx.fillStyle;
+        ctx.shadowColor = pColor;
         ctx.beginPath();
         ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
         ctx.fill();
@@ -480,11 +768,11 @@ function draw() {
         ctx.font = `bold ${Math.round(13 * scaleFactor)}px Cairo`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(p.kind === 'health' ? '+' : '⚡', 0, 1);
+        ctx.fillText(pIcon, 0, 1);
         ctx.restore();
     }
 
-    // رسم الرصاص
+    // رسم رصاص اللاعب
     for (let b of bullets) {
         ctx.save();
         ctx.fillStyle = b.color;
@@ -496,13 +784,36 @@ function draw() {
         ctx.restore();
     }
 
+    // رسم طلقات الأعداء
+    for (let eb of enemyBullets) {
+        ctx.save();
+        ctx.fillStyle = eb.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = eb.color;
+        ctx.beginPath();
+        ctx.arc(eb.x, eb.y, eb.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
     // رسم المركبة الفضائية للاعب
     ctx.save();
     ctx.translate(player.x, player.y);
 
+    // هالة الدرع النشط
+    if (player.shieldTimer > now) {
+        ctx.strokeStyle = '#34d399';
+        ctx.lineWidth = 2.5;
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = '#34d399';
+        ctx.beginPath();
+        ctx.arc(0, 0, player.radius * 1.45, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
     // لهب المحرك
     const flameHeight = (12 + Math.random() * 8) * scaleFactor;
-    ctx.fillStyle = '#00f2fe';
+    ctx.fillStyle = stg.accentColor;
     ctx.beginPath();
     ctx.moveTo(-player.radius * 0.35, player.radius * 0.7);
     ctx.lineTo(0, player.radius * 0.7 + flameHeight);
@@ -529,8 +840,10 @@ function draw() {
     ctx.fill();
     ctx.restore();
 
-    // رسم الأعداء
+    // رسم الأعداء وعدّاد حياة كل عدو فوقه
     for (let e of enemies) {
+        drawEnemyHealthBar(e);
+
         ctx.save();
         ctx.translate(e.x, e.y);
         ctx.rotate(e.angle);
@@ -556,6 +869,14 @@ function draw() {
             ctx.lineTo(e.radius * 0.6, -e.radius);
             ctx.lineTo(-e.radius * 0.6, -e.radius);
             ctx.lineTo(-e.radius, 0);
+            ctx.closePath();
+            ctx.fill();
+        } else if (e.type === 'striker') {
+            ctx.beginPath();
+            ctx.moveTo(0, e.radius * 1.15);
+            ctx.lineTo(e.radius * 0.95, -e.radius * 0.55);
+            ctx.lineTo(0, -e.radius * 0.95);
+            ctx.lineTo(-e.radius * 0.95, -e.radius * 0.55);
             ctx.closePath();
             ctx.fill();
         } else {
@@ -585,27 +906,33 @@ function draw() {
 // حلقة التشغيل الرئيسية
 function gameLoop(now) {
     update(now);
-    draw();
+    draw(now);
     requestAnimationFrame(gameLoop);
 }
 
 // التحكم بحالات اللعبة والواجهة
 function startGame() {
     initAudio();
+    const now = performance.now();
     score = 0;
-    level = 1;
+    stage = 1;
     player.hp = player.maxHp;
     player.weaponLevel = 1;
+    player.weaponTimer = 0;
+    player.shieldTimer = 0;
     player.x = width / 2;
     player.y = height - 110;
     bullets = [];
+    enemyBullets = [];
     enemies = [];
     particles = [];
     powerups = [];
+    lastEnemySpawn = now;
 
     scoreDisplay.textContent = '0';
-    levelDisplay.textContent = '1';
+    syncStage(now, false);
     updateHealthUI();
+    updateBuffsUI(now);
 
     startScreen.classList.add('hidden');
     gameOverScreen.classList.add('hidden');
@@ -614,11 +941,13 @@ function startGame() {
     hud.classList.remove('hidden');
 
     gameState = 'PLAYING';
+    showStageBanner(getStageConfig(1));
 }
 
 function endGame() {
     gameState = 'GAMEOVER';
     hud.classList.add('hidden');
+    activeBuffsEl.classList.add('hidden');
     gameOverScreen.classList.remove('hidden');
     finalScore.textContent = score;
 
@@ -632,13 +961,25 @@ function endGame() {
     highScoreEnd.textContent = highScore;
 }
 
+function shiftTimersOnResume(deltaMs) {
+    if (deltaMs <= 0) return;
+    if (player.weaponTimer > 0) player.weaponTimer += deltaMs;
+    if (player.shieldTimer > 0) player.shieldTimer += deltaMs;
+    if (lastEnemySpawn > 0) lastEnemySpawn += deltaMs;
+    for (let e of enemies) {
+        if (e.lastEnemyShot > 0) e.lastEnemyShot += deltaMs;
+    }
+}
+
 function togglePauseSettings() {
     if (gameState === 'PLAYING') {
+        pausedAt = performance.now();
         previousStateBeforeModal = 'PLAYING';
         gameState = 'PAUSED';
         restartFromPauseBtn.classList.remove('hidden');
         settingsModal.classList.remove('hidden');
     } else if (gameState === 'PAUSED') {
+        shiftTimersOnResume(performance.now() - pausedAt);
         settingsModal.classList.add('hidden');
         gameState = 'PLAYING';
     }
@@ -652,6 +993,7 @@ restartFromPauseBtn.addEventListener('click', startGame);
 homeBtn.addEventListener('click', () => {
     gameOverScreen.classList.add('hidden');
     hud.classList.add('hidden');
+    stageBanner.classList.add('hidden');
     startScreen.classList.remove('hidden');
     gameState = 'START';
 });
@@ -667,12 +1009,14 @@ pauseBtn.addEventListener('click', togglePauseSettings);
 closeSettingsBtn.addEventListener('click', () => {
     settingsModal.classList.add('hidden');
     if (previousStateBeforeModal === 'PLAYING') {
+        shiftTimersOnResume(performance.now() - pausedAt);
         gameState = 'PLAYING';
     }
 });
 
 aboutBtn.addEventListener('click', () => {
     if (gameState === 'PLAYING') {
+        pausedAt = performance.now();
         previousStateBeforeModal = 'PLAYING';
         gameState = 'PAUSED';
     } else {
@@ -684,6 +1028,7 @@ aboutBtn.addEventListener('click', () => {
 closeAboutBtn.addEventListener('click', () => {
     aboutModal.classList.add('hidden');
     if (previousStateBeforeModal === 'PLAYING') {
+        shiftTimersOnResume(performance.now() - pausedAt);
         gameState = 'PLAYING';
     }
 });
