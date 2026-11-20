@@ -3,22 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>حرب الفضاء | abdcode</title>
+    <title>حرب الفضاء 3D | abdcode</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <!-- مكتبة Three.js لتشغيل الرسومات ثلاثية الأبعاد 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-    <canvas id="gameCanvas"></canvas>
-
-    <!-- إشعار الانتقال بين المراحل -->
-    <div id="stageBanner" class="stage-banner hidden">
-        <span id="stageBannerTag" class="stage-tag">مرحلة جديدة</span>
-        <h2 id="stageBannerTitle" class="stage-title">المرحلة 1</h2>
-        <p id="stageBannerDesc" class="stage-desc">أجواء هادئة وبداية المعركة</p>
-    </div>
+    <!-- حاوية عالم 3D -->
+    <div id="sceneContainer"></div>
+    <!-- طبقة عرض أشرطة حياة الأعداء 3D فوق رؤوسهم -->
+    <div id="enemyLabelsLayer"></div>
 
     <!-- شريط المعلومات العلوي أثناء اللعب -->
     <div id="hud" class="hidden">
@@ -32,10 +30,14 @@
                     <span class="hud-label">المرحلة</span>
                     <span id="stageDisplay" class="hud-value">1 • السديم النيون</span>
                 </div>
+                <div class="hud-box">
+                    <span class="hud-label">الأعداء</span>
+                    <span id="stageProgressDisplay" class="hud-value">0 / 10</span>
+                </div>
             </div>
             <div class="hud-group">
                 <div class="hud-box health-box">
-                    <span class="hud-label">الدرع</span>
+                    <span class="hud-label">درع السفينة</span>
                     <div class="health-bar-bg">
                         <div id="healthBar" class="health-bar-fill"></div>
                     </div>
@@ -44,16 +46,16 @@
             </div>
         </div>
 
-        <!-- مؤشرات التعزيزات النشطة والوقت المتبقي لكل منها -->
+        <!-- مؤشرات الهدايا النشطة والوقت المتبقي لكل هدية -->
         <div id="activeBuffs" class="buffs-bar hidden"></div>
     </div>
 
     <!-- شاشة البداية -->
     <div id="startScreen" class="overlay">
         <div class="card">
-            <div class="badge">لعبة أركيد • مراحل متطورة</div>
-            <h1 class="game-title">حرب الفضاء</h1>
-            <p class="game-subtitle">دافع عن المجرة عبر مراحل متصاعدة وتغيرات كاملة في الأجواء والأعداء</p>
+            <div class="badge">تجربة 3D ثلاثية الأبعاد</div>
+            <h1 class="game-title">حرب الفضاء 3D</h1>
+            <p class="game-subtitle">قتال فضائي قريب ثلاثي الأبعاد، هدايا تطوير بوقت محدد، ومراحل متجددة</p>
             
             <div class="high-score-pill">
                 <span>أعلى نتيجة:</span>
@@ -61,13 +63,37 @@
             </div>
 
             <div class="btn-group">
-                <button id="startBtn" class="btn btn-primary">ابدأ اللعب</button>
+                <button id="startBtn" class="btn btn-primary">ابدأ المعركة 3D</button>
                 <button id="openSettingsBtn" class="btn btn-secondary">⚙️ الإعدادات</button>
             </div>
 
             <div class="controls-hint">
-                <span>🖥️ الكمبيوتر: الأسهم / WASD + مسافة أو الماوس</span>
-                <span>📱 الهاتف: اسحب بإصبعك للتحرك</span>
+                <span>🖥️ الكمبيوتر: الأسهم / WASD أو تحريك الماوس + مسافة</span>
+                <span>📱 الهاتف: اسحب بإصبعك للتحرك والمناورة</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- شاشة إتمام المرحلة والانتقال للتالية -->
+    <div id="stageCompleteModal" class="overlay hidden">
+        <div class="card stage-complete-card">
+            <div class="badge" id="stageCompleteBadge">تم تطهير القطاع!</div>
+            <h2 class="modal-title" id="stageCompleteTitle">أنهيت المرحلة 1 بنجاح 🎉</h2>
+            <p class="about-text" id="stageCompleteDesc">
+                استعد للمرحلة القادمة بأجواء جديدة وأعداء أقوى!
+            </p>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span>نقاطك الحالية</span>
+                    <strong id="stageScoreValue">0</strong>
+                </div>
+                <div class="stat-item">
+                    <span>مكافأة المرحلة</span>
+                    <strong id="stageBonusValue">+150</strong>
+                </div>
+            </div>
+            <div class="btn-group">
+                <button id="nextStageBtn" class="btn btn-primary">التالي ⬅️ المرحلة 2</button>
             </div>
         </div>
     </div>
@@ -120,7 +146,7 @@
         <div class="card">
             <h2 class="modal-title">حول اللعبة</h2>
             <p class="about-text">
-                لعبة <strong>حرب الفضاء</strong> هي لعبة تصويب فضائية سريعة ومصممة لتعمل بسلاسة على أجهزة الكمبيوتر والهواتف الذكية.
+                لعبة <strong>حرب الفضاء 3D</strong> هي لعبة قتال فضائي ثلاثية الأبعاد تعمل بسلاسة على الكمبيوتر والهاتف.
             </p>
             <div class="credit-box">
                 <span>من تصميم وتطوير</span>
@@ -149,7 +175,7 @@
     <!-- شاشة نهاية اللعبة -->
     <div id="gameOverScreen" class="overlay hidden">
         <div class="card">
-            <h2 class="gameover-title">انتهت اللعبة!</h2>
+            <h2 class="gameover-title">تحطمت السفينة!</h2>
             <div class="stats-grid">
                 <div class="stat-item">
                     <span>النتيجة النهائية</span>
