@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>حرب الفضاء | abdcode</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- شريط المعلومات العلوي أثناء اللعب -->
+    <div id="hud" class="hidden">
+        <div class="hud-group">
+            <div class="hud-box">
+                <span class="hud-label">النقاط</span>
+                <span id="scoreDisplay" class="hud-value">0</span>
+            </div>
+            <div class="hud-box">
+                <span class="hud-label">المستوى</span>
+                <span id="levelDisplay" class="hud-value">1</span>
+            </div>
+        </div>
+        <div class="hud-group">
+            <div class="hud-box health-box">
+                <span class="hud-label">الدرع</span>
+                <div class="health-bar-bg">
+                    <div id="healthBar" class="health-bar-fill"></div>
+                </div>
+            </div>
+            <button id="pauseBtn" class="icon-btn" title="إيقاف مؤقت / الإعدادات">⚙️</button>
+        </div>
+    </div>
+
+    <!-- شاشة البداية -->
+    <div id="startScreen" class="overlay">
+        <div class="card">
+            <div class="badge">لعبة أركيد</div>
+            <h1 class="game-title">حرب الفضاء</h1>
+            <p class="game-subtitle">دافع عن المجرة ودمر أساطيل النيازك والمركبات المعادية</p>
+            
+            <div class="high-score-pill">
+                <span>أعلى نتيجة:</span>
+                <strong id="highScoreStart">0</strong>
+            </div>
+
+            <div class="btn-group">
+                <button id="startBtn" class="btn btn-primary">ابدأ اللعب</button>
+                <button id="openSettingsBtn" class="btn btn-secondary">⚙️ الإعدادات</button>
+            </div>
+
+            <div class="controls-hint">
+                <span>🖥️ الكمبيوتر: الأسهم / WASD + مسافة أو الماوس</span>
+                <span>📱 الهاتف: اسحب بإصبعك للتحرك</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- شاشة الإيقاف المؤقت والإعدادات -->
+    <div id="settingsModal" class="overlay hidden">
+        <div class="card">
+            <h2 class="modal-title">⚙️ الإعدادات</h2>
+            
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">المؤثرات الصوتية</span>
+                    <span class="setting-desc">تفعيل أو كتم أصوات الليزر والانفجارات</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="soundToggle" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">الإطلاق التلقائي</span>
+                    <span class="setting-desc">إطلاق النار تلقائياً (مناسب للهاتف)</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="autoFireToggle" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="setting-row column-row">
+                <span class="setting-name">مستوى الصعوبة</span>
+                <div class="difficulty-selector">
+                    <button class="diff-btn" data-diff="easy">سهل</button>
+                    <button class="diff-btn active" data-diff="normal">متوسط</button>
+                    <button class="diff-btn" data-diff="hard">صعب</button>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button id="closeSettingsBtn" class="btn btn-primary">حفظ ومتابعة</button>
+                <button id="restartFromPauseBtn" class="btn btn-danger hidden">إعادة اللعب</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة حول -->
+    <div id="aboutModal" class="overlay hidden">
+        <div class="card">
+            <h2 class="modal-title">حول اللعبة</h2>
+            <p class="about-text">
+                لعبة <strong>حرب الفضاء</strong> هي لعبة تصويب فضائية سريعة ومصممة لتعمل بسلاسة على أجهزة الكمبيوتر والهواتف الذكية.
+            </p>
+            <div class="credit-box">
+                <span>من تصميم وتطوير</span>
+                <strong>abdcode</strong>
+            </div>
+            <div class="social-links-modal">
+                <a href="https://youtube.com/@abdcode3" target="_blank" rel="noopener noreferrer" class="social-card youtube">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    </svg>
+                    <span>قناة اليوتيوب</span>
+                </a>
+                <a href="https://abdcode.pages.dev/" target="_blank" rel="noopener noreferrer" class="social-card website">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                    </svg>
+                    <span>الموقع الرسمي</span>
+                </a>
+            </div>
+            <button id="closeAboutBtn" class="btn btn-secondary">إغلاق</button>
+        </div>
+    </div>
+
+    <!-- شاشة نهاية اللعبة -->
+    <div id="gameOverScreen" class="overlay hidden">
+        <div class="card">
+            <h2 class="gameover-title">انتهت اللعبة!</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span>النتيجة النهائية</span>
+                    <strong id="finalScore">0</strong>
+                </div>
+                <div class="stat-item">
+                    <span>أعلى نتيجة</span>
+                    <strong id="highScoreEnd">0</strong>
+                </div>
+            </div>
+            <div class="btn-group">
+                <button id="restartBtn" class="btn btn-primary">العب مرة أخرى</button>
+                <button id="homeBtn" class="btn btn-secondary">القائمة الرئيسية</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- شريط التذييل السفلي -->
+    <footer id="gameFooter">
+        <button id="aboutBtn" class="footer-about-btn">حول</button>
+        <span class="footer-divider">|</span>
+        <span class="footer-credit">من تصميم <strong>abdcode</strong></span>
+        <div class="footer-icons">
+            <a href="https://youtube.com/@abdcode3" target="_blank" rel="noopener noreferrer" class="footer-icon youtube" title="قناة abdcode على يوتيوب" aria-label="قناة اليوتيوب">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
+            </a>
+            <a href="https://abdcode.pages.dev/" target="_blank" rel="noopener noreferrer" class="footer-icon website" title="موقع abdcode الرسمي" aria-label="الموقع الرسمي">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+            </a>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
