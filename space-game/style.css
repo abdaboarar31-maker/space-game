@@ -1,12 +1,12 @@
 :root {
-    --bg-dark: #060913;
-    --card-bg: rgba(13, 19, 38, 0.88);
+    --bg-dark: #050814;
+    --card-bg: rgba(12, 18, 38, 0.9);
     --primary: #00f2fe;
     --primary-dark: #0284c7;
     --accent: #f43f5e;
     --text-main: #f8fafc;
     --text-muted: #94a3b8;
-    --border-glow: rgba(0, 242, 254, 0.28);
+    --border-glow: rgba(0, 242, 254, 0.3);
 }
 
 * {
@@ -27,67 +27,62 @@ html, body {
     touch-action: none;
 }
 
-canvas {
+#sceneContainer {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+}
+
+#sceneContainer canvas {
     display: block;
     width: 100%;
     height: 100%;
+}
+
+/* طبقة أشرطة حياة الأعداء فوق المجسمات 3D */
+#enemyLabelsLayer {
     position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 1;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.enemy-hp-tag {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    pointer-events: none;
+}
+
+.enemy-hp-num {
+    font-size: 0.7rem;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+    line-height: 1;
+}
+
+.enemy-hp-track {
+    width: 44px;
+    height: 5px;
+    background: rgba(5, 8, 20, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 99px;
+    overflow: hidden;
+}
+
+.enemy-hp-fill {
+    height: 100%;
+    background: #22c55e;
+    transition: width 0.08s linear;
 }
 
 .hidden {
     display: none !important;
-}
-
-/* إشعار المرحلة الجديدة */
-.stage-banner {
-    position: fixed;
-    top: 22%;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 15;
-    pointer-events: none;
-    background: rgba(10, 15, 32, 0.88);
-    border: 1px solid var(--primary);
-    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.65), 0 0 22px rgba(0, 242, 254, 0.25);
-    backdrop-filter: blur(10px);
-    padding: 12px 24px;
-    border-radius: 18px;
-    text-align: center;
-    min-width: 240px;
-    max-width: 90vw;
-    animation: bannerIn 0.3s ease;
-}
-
-@keyframes bannerIn {
-    from { opacity: 0; transform: translate(-50%, -12px) scale(0.95); }
-    to { opacity: 1; transform: translate(-50%, 0) scale(1); }
-}
-
-.stage-tag {
-    display: inline-block;
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: var(--primary);
-    background: rgba(0, 242, 254, 0.14);
-    padding: 2px 10px;
-    border-radius: 99px;
-    margin-bottom: 4px;
-}
-
-.stage-title {
-    font-size: 1.35rem;
-    font-weight: 900;
-    color: #ffffff;
-    line-height: 1.25;
-}
-
-.stage-desc {
-    font-size: 0.82rem;
-    color: var(--text-muted);
-    margin-top: 2px;
 }
 
 /* شريط المعلومات العلوي */
@@ -120,7 +115,7 @@ canvas {
 }
 
 .hud-box {
-    background: rgba(13, 19, 38, 0.8);
+    background: rgba(12, 18, 38, 0.82);
     border: 1px solid var(--border-glow);
     backdrop-filter: blur(8px);
     padding: 6px 12px;
@@ -128,7 +123,7 @@ canvas {
     display: flex;
     flex-direction: column;
     align-items: center;
-    min-width: 72px;
+    min-width: 70px;
 }
 
 .stage-hud-box {
@@ -136,25 +131,25 @@ canvas {
 }
 
 .hud-label {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     color: var(--text-muted);
 }
 
 .hud-value {
-    font-size: 1.05rem;
+    font-size: 1.02rem;
     font-weight: 900;
     color: var(--primary);
     white-space: nowrap;
 }
 
 .health-box {
-    min-width: 104px;
+    min-width: 106px;
 }
 
 .health-bar-bg {
     width: 100%;
     height: 8px;
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.14);
     border-radius: 99px;
     overflow: hidden;
     margin-top: 4px;
@@ -164,10 +159,10 @@ canvas {
     width: 100%;
     height: 100%;
     background: linear-gradient(90deg, #10b981, #00f2fe);
-    transition: width 0.25s ease, background 0.25s ease;
+    transition: width 0.2s ease, background 0.2s ease;
 }
 
-/* شريط التعزيزات النشطة ووقت انتهائها */
+/* مؤشرات الهدايا النشطة والوقت المتبقي */
 .buffs-bar {
     display: flex;
     flex-wrap: wrap;
@@ -176,13 +171,13 @@ canvas {
 }
 
 .buff-pill {
-    background: rgba(13, 19, 38, 0.88);
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(12, 18, 38, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 12px;
     padding: 6px 10px;
-    min-width: 132px;
+    min-width: 140px;
     backdrop-filter: blur(8px);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
 }
 
 .buff-header {
@@ -190,21 +185,22 @@ canvas {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    font-size: 0.76rem;
+    font-size: 0.78rem;
     font-weight: 800;
     color: #f8fafc;
 }
 
 .buff-time {
     font-variant-numeric: tabular-nums;
-    font-size: 0.74rem;
+    font-size: 0.76rem;
     color: #fbbf24;
+    font-weight: 900;
 }
 
 .buff-track {
     width: 100%;
     height: 5px;
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.14);
     border-radius: 99px;
     overflow: hidden;
     margin-top: 5px;
@@ -217,7 +213,7 @@ canvas {
 }
 
 .icon-btn {
-    background: rgba(13, 19, 38, 0.85);
+    background: rgba(12, 18, 38, 0.85);
     border: 1px solid var(--border-glow);
     color: white;
     width: 42px;
@@ -252,13 +248,18 @@ canvas {
 .card {
     background: var(--card-bg);
     border: 1px solid var(--border-glow);
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 25px rgba(0, 242, 254, 0.12);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 25px rgba(0, 242, 254, 0.14);
     border-radius: 24px;
     padding: 28px 24px;
     width: 100%;
     max-width: 420px;
     text-align: center;
     animation: popIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.stage-complete-card {
+    border-color: #fbbf24;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(251, 191, 36, 0.25);
 }
 
 @keyframes popIn {
@@ -279,7 +280,7 @@ canvas {
 }
 
 .game-title {
-    font-size: 2.3rem;
+    font-size: 2.25rem;
     font-weight: 900;
     background: linear-gradient(135deg, #ffffff 20%, #00f2fe 100%);
     -webkit-background-clip: text;
@@ -370,9 +371,9 @@ canvas {
 
 /* الإعدادات */
 .modal-title {
-    font-size: 1.5rem;
+    font-size: 1.45rem;
     font-weight: 800;
-    margin-bottom: 18px;
+    margin-bottom: 16px;
     color: var(--primary);
 }
 
@@ -408,7 +409,6 @@ canvas {
     color: var(--text-muted);
 }
 
-/* زر التبديل Switch */
 .switch {
     position: relative;
     display: inline-block;
@@ -453,7 +453,6 @@ input:checked + .slider:before {
     background-color: #040914;
 }
 
-/* أزرار الصعوبة */
 .difficulty-selector {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -478,7 +477,6 @@ input:checked + .slider:before {
     color: var(--primary);
 }
 
-/* نافذة حول */
 .about-text {
     font-size: 0.92rem;
     color: var(--text-muted);
@@ -544,7 +542,6 @@ input:checked + .slider:before {
     border: 1px solid rgba(0, 242, 254, 0.35);
 }
 
-/* شاشة نهاية اللعبة */
 .gameover-title {
     font-size: 1.9rem;
     font-weight: 900;
@@ -664,17 +661,17 @@ input:checked + .slider:before {
         padding: 22px 18px;
     }
     .game-title {
-        font-size: 1.9rem;
+        font-size: 1.85rem;
     }
     .hud-box {
-        padding: 5px 10px;
-        min-width: 64px;
+        padding: 5px 8px;
+        min-width: 58px;
     }
     .stage-hud-box {
-        min-width: 102px;
+        min-width: 96px;
     }
     .buff-pill {
-        min-width: 118px;
+        min-width: 122px;
         padding: 5px 8px;
     }
 }
