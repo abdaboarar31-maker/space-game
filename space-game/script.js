@@ -1,25 +1,29 @@
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-
 // عناصر الواجهة
+const sceneContainer = document.getElementById('sceneContainer');
+const enemyLabelsLayer = document.getElementById('enemyLabelsLayer');
 const hud = document.getElementById('hud');
 const activeBuffsEl = document.getElementById('activeBuffs');
+
 const startScreen = document.getElementById('startScreen');
+const stageCompleteModal = document.getElementById('stageCompleteModal');
 const settingsModal = document.getElementById('settingsModal');
 const aboutModal = document.getElementById('aboutModal');
 const gameOverScreen = document.getElementById('gameOverScreen');
 
-const stageBanner = document.getElementById('stageBanner');
-const stageBannerTag = document.getElementById('stageBannerTag');
-const stageBannerTitle = document.getElementById('stageBannerTitle');
-const stageBannerDesc = document.getElementById('stageBannerDesc');
-
 const scoreDisplay = document.getElementById('scoreDisplay');
 const stageDisplay = document.getElementById('stageDisplay');
+const stageProgressDisplay = document.getElementById('stageProgressDisplay');
 const healthBar = document.getElementById('healthBar');
 const highScoreStart = document.getElementById('highScoreStart');
 const highScoreEnd = document.getElementById('highScoreEnd');
 const finalScore = document.getElementById('finalScore');
+
+const stageCompleteBadge = document.getElementById('stageCompleteBadge');
+const stageCompleteTitle = document.getElementById('stageCompleteTitle');
+const stageCompleteDesc = document.getElementById('stageCompleteDesc');
+const stageScoreValue = document.getElementById('stageScoreValue');
+const stageBonusValue = document.getElementById('stageBonusValue');
+const nextStageBtn = document.getElementById('nextStageBtn');
 
 const startBtn = document.getElementById('startBtn');
 const openSettingsBtn = document.getElementById('openSettingsBtn');
@@ -38,19 +42,20 @@ const diffButtons = document.querySelectorAll('.diff-btn');
 // إعدادات وحالة اللعبة
 let width = window.innerWidth || 800;
 let height = window.innerHeight || 600;
-let scaleFactor = 1;
 
-let gameState = 'START'; // START, PLAYING, PAUSED, GAMEOVER
+let gameState = 'START'; // START, PLAYING, STAGE_COMPLETE, PAUSED, GAMEOVER
 let previousStateBeforeModal = 'START';
 let pausedAt = 0;
-let bannerHideTimeout = null;
 
 let score = 0;
 let stage = 1;
+let enemiesSpawnedInStage = 0;
+let enemiesDefeatedInStage = 0;
+let stageTargetCount = 10;
 let highScore = 0;
 
 try {
-    highScore = parseInt(localStorage.getItem('abdcode_space_highscore') || '0', 10);
+    highScore = parseInt(localStorage.getItem('abdcode_space3d_highscore') || '0', 10);
 } catch (e) {
     highScore = 0;
 }
@@ -63,72 +68,72 @@ const settings = {
 };
 
 const difficultyConfig = {
-    easy: { spawnRate: 1320, enemySpeedMult: 0.78, enemyHpMult: 0.8 },
-    normal: { spawnRate: 960, enemySpeedMult: 1.0, enemyHpMult: 1.0 },
-    hard: { spawnRate: 680, enemySpeedMult: 1.32, enemyHpMult: 1.3 }
+    easy: { spawnRate: 1450, enemySpeedMult: 0.78, enemyHpMult: 0.85, fireCooldownMult: 1.25 },
+    normal: { spawnRate: 1100, enemySpeedMult: 1.0, enemyHpMult: 1.0, fireCooldownMult: 1.0 },
+    hard: { spawnRate: 820, enemySpeedMult: 1.28, enemyHpMult: 1.3, fireCooldownMult: 0.78 }
 };
 
-// تعريف المراحل (كل مرحلة تغيّر الأجواء والألوان وأشكال الأعداء وقوتهم)
+// تعريف المراحل 3D (كل مرحلة بتصميم وألوان وأجواء وأعداء مختلفين)
 const STAGE_THEMES = [
     {
         name: 'السديم النيون',
-        tag: 'المرحلة 1 • بداية هادئة',
-        desc: 'أجواء سماوية وبنفسجية هادئة مع أسراب خفيفة',
-        bgTop: '#060913',
-        bgBottom: '#0c1633',
-        nebulaColor: 'rgba(0, 242, 254, 0.11)',
-        accentColor: '#00f2fe',
-        starSpeedMult: 1.0,
-        spawnMult: 1.0,
-        speedMult: 1.0,
+        desc: 'أجواء سماوية هادئة، أسراب خفيفة واشتباك مباشر',
+        bgHex: 0x050a18,
+        fogHex: 0x07122b,
+        lightHex: 0x00f2fe,
+        accentCss: '#00f2fe',
+        planetHex: 0x0284c7,
+        ringHex: 0x38bdf8,
+        enemyColors: { interceptor: 0x38bdf8, cruiser: 0x818cf8, crystal: 0x22d3ee },
+        targetCount: 10,
+        enemyFireInterval: 2100,
         hpMult: 1.0,
-        enemyFireChance: 0.0,
-        colors: { scout: '#38bdf8', asteroid: '#f59e0b', tank: '#818cf8', striker: '#22d3ee' }
+        speedMult: 1.0
     },
     {
         name: 'عاصفة النيازك',
-        tag: 'المرحلة 2 • حرارة وتصاعد',
-        desc: 'غبار ناري ونيازك أسرع مع هجمات متفرعة',
-        bgTop: '#12070c',
-        bgBottom: '#2b100e',
-        nebulaColor: 'rgba(249, 115, 22, 0.14)',
-        accentColor: '#fb923c',
-        starSpeedMult: 1.45,
-        spawnMult: 0.84,
-        speedMult: 1.18,
-        hpMult: 1.35,
-        enemyFireChance: 0.22,
-        colors: { scout: '#fb7185', asteroid: '#f97316', tank: '#ef4444', striker: '#fbbf24' }
+        desc: 'قطاع بركاني ناري مع طرادات ثقيلة وطلقات مزدوجة',
+        bgHex: 0x160708,
+        fogHex: 0x2b0d0e,
+        lightHex: 0xf97316,
+        accentCss: '#fb923c',
+        planetHex: 0xea580c,
+        ringHex: 0xfbbf24,
+        enemyColors: { interceptor: 0xfb7185, cruiser: 0xef4444, crystal: 0xf97316 },
+        targetCount: 14,
+        enemyFireInterval: 1750,
+        hpMult: 1.4,
+        speedMult: 1.15
     },
     {
         name: 'المدار القرمزي',
-        tag: 'المرحلة 3 • ضغط عالٍ',
-        desc: 'أجواء قرمزية حادة ومناورات أسرع وطلقات معادية',
-        bgTop: '#140512',
-        bgBottom: '#2d0924',
-        nebulaColor: 'rgba(244, 63, 94, 0.15)',
-        accentColor: '#f43f5e',
-        starSpeedMult: 1.85,
-        spawnMult: 0.72,
-        speedMult: 1.34,
-        hpMult: 1.75,
-        enemyFireChance: 0.38,
-        colors: { scout: '#f43f5e', asteroid: '#e11d48', tank: '#c026d3', striker: '#fda4af' }
+        desc: 'مناورات سريعة وهجوم مكثف من أسطول القرمزي',
+        bgHex: 0x150414,
+        fogHex: 0x2c0829,
+        lightHex: 0xf43f5e,
+        accentCss: '#f43f5e',
+        planetHex: 0xbe123c,
+        ringHex: 0xf472b6,
+        enemyColors: { interceptor: 0xf43f5e, cruiser: 0xc026d3, crystal: 0xe11d48 },
+        targetCount: 18,
+        enemyFireInterval: 1450,
+        hpMult: 1.85,
+        speedMult: 1.28
     },
     {
         name: 'قلب المجرة الذهبي',
-        tag: 'المرحلة 4 • ذروة المعركة',
-        desc: 'طاقة ذهبية زمردية وأعداء شديدو التحمل',
-        bgTop: '#071210',
-        bgBottom: '#162614',
-        nebulaColor: 'rgba(251, 191, 36, 0.14)',
-        accentColor: '#fbbf24',
-        starSpeedMult: 2.2,
-        spawnMult: 0.62,
-        speedMult: 1.48,
-        hpMult: 2.2,
-        enemyFireChance: 0.52,
-        colors: { scout: '#34d399', asteroid: '#fbbf24', tank: '#f59e0b', striker: '#a3e635' }
+        desc: 'معركة النخبة وسط الطاقة الذهبية والزمردية',
+        bgHex: 0x06130f,
+        fogHex: 0x0f261d,
+        lightHex: 0xfbbf24,
+        accentCss: '#fbbf24',
+        planetHex: 0xd97706,
+        ringHex: 0x34d399,
+        enemyColors: { interceptor: 0x34d399, cruiser: 0xfbbf24, crystal: 0xa3e635 },
+        targetCount: 22,
+        enemyFireInterval: 1200,
+        hpMult: 2.35,
+        speedMult: 1.4
     }
 ];
 
@@ -136,50 +141,15 @@ function getStageConfig(stageNum) {
     const idx = (stageNum - 1) % STAGE_THEMES.length;
     const cycle = Math.floor((stageNum - 1) / STAGE_THEMES.length);
     const base = STAGE_THEMES[idx];
-    const extraScale = 1 + cycle * 0.35;
-
     return {
         ...base,
         stageNum,
-        label: cycle > 0 ? `${base.name} (دورة ${cycle + 1})` : base.name,
-        tag: cycle > 0 ? `المرحلة ${stageNum} • دورة متقدمة ${cycle + 1}` : base.tag,
-        spawnMult: Math.max(0.42, base.spawnMult * Math.pow(0.92, cycle)),
-        speedMult: base.speedMult * (1 + cycle * 0.12),
-        hpMult: base.hpMult * extraScale,
-        enemyFireChance: Math.min(0.75, base.enemyFireChance + cycle * 0.08)
+        label: cycle > 0 ? `${base.name} +${cycle}` : base.name,
+        targetCount: base.targetCount + cycle * 6,
+        hpMult: base.hpMult * (1 + cycle * 0.4),
+        speedMult: base.speedMult * (1 + cycle * 0.1),
+        enemyFireInterval: Math.max(850, base.enemyFireInterval * Math.pow(0.9, cycle))
     };
-}
-
-function showStageBanner(cfg) {
-    stageBannerTag.textContent = cfg.tag;
-    stageBannerTitle.textContent = `المرحلة ${cfg.stageNum}: ${cfg.label}`;
-    stageBannerDesc.textContent = cfg.desc;
-    stageBanner.style.borderColor = cfg.accentColor;
-    stageBannerTag.style.color = cfg.accentColor;
-    stageBanner.classList.remove('hidden');
-
-    if (bannerHideTimeout) clearTimeout(bannerHideTimeout);
-    bannerHideTimeout = setTimeout(() => {
-        stageBanner.classList.add('hidden');
-    }, 2300);
-}
-
-function syncStage(now, announce = true) {
-    const newStage = Math.floor(score / 250) + 1;
-    if (newStage !== stage) {
-        stage = newStage;
-        const cfg = getStageConfig(stage);
-        stageDisplay.textContent = `${stage} • ${cfg.label}`;
-        stageDisplay.style.color = cfg.accentColor;
-        if (announce) {
-            playSound('stageup');
-            showStageBanner(cfg);
-        }
-    } else {
-        const cfg = getStageConfig(stage);
-        stageDisplay.textContent = `${stage} • ${cfg.label}`;
-        stageDisplay.style.color = cfg.accentColor;
-    }
 }
 
 // نظام الصوت الآمن (Web Audio API)
@@ -208,113 +178,238 @@ function playSound(type) {
         gain.connect(audioCtx.destination);
 
         const now = audioCtx.currentTime;
-
         if (type === 'shoot') {
             osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(680, now);
-            osc.frequency.exponentialRampToValueAtTime(180, now + 0.09);
-            gain.gain.setValueAtTime(0.08, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+            osc.frequency.setValueAtTime(720, now);
+            osc.frequency.exponentialRampToValueAtTime(190, now + 0.08);
+            gain.gain.setValueAtTime(0.07, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
             osc.start(now);
-            osc.stop(now + 0.09);
+            osc.stop(now + 0.08);
+        } else if (type === 'enemyShoot') {
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(320, now);
+            osc.frequency.exponentialRampToValueAtTime(120, now + 0.1);
+            gain.gain.setValueAtTime(0.05, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+            osc.start(now);
+            osc.stop(now + 0.1);
         } else if (type === 'explosion') {
             osc.type = 'square';
             osc.frequency.setValueAtTime(140, now);
-            osc.frequency.exponentialRampToValueAtTime(32, now + 0.25);
+            osc.frequency.exponentialRampToValueAtTime(30, now + 0.26);
             gain.gain.setValueAtTime(0.16, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
             osc.start(now);
-            osc.stop(now + 0.25);
+            osc.stop(now + 0.26);
         } else if (type === 'hit') {
             osc.type = 'triangle';
-            osc.frequency.setValueAtTime(220, now);
-            osc.frequency.exponentialRampToValueAtTime(70, now + 0.14);
+            osc.frequency.setValueAtTime(210, now);
+            osc.frequency.exponentialRampToValueAtTime(65, now + 0.14);
             gain.gain.setValueAtTime(0.15, now);
             gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
             osc.start(now);
             osc.stop(now + 0.14);
         } else if (type === 'powerup') {
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(420, now);
-            osc.frequency.exponentialRampToValueAtTime(880, now + 0.2);
-            gain.gain.setValueAtTime(0.12, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+            osc.frequency.setValueAtTime(450, now);
+            osc.frequency.exponentialRampToValueAtTime(920, now + 0.22);
+            gain.gain.setValueAtTime(0.13, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
             osc.start(now);
-            osc.stop(now + 0.2);
-        } else if (type === 'stageup') {
+            osc.stop(now + 0.22);
+        } else if (type === 'stageClear') {
             osc.type = 'triangle';
-            osc.frequency.setValueAtTime(340, now);
-            osc.frequency.exponentialRampToValueAtTime(760, now + 0.32);
-            gain.gain.setValueAtTime(0.14, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+            osc.frequency.setValueAtTime(380, now);
+            osc.frequency.exponentialRampToValueAtTime(840, now + 0.35);
+            gain.gain.setValueAtTime(0.15, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
             osc.start(now);
-            osc.stop(now + 0.32);
+            osc.stop(now + 0.35);
         }
     } catch (e) {}
 }
 
-// كائنات اللعبة
+// ==========================================
+// إعداد مشهد Three.js ثلاثي الأبعاد 3D
+// ==========================================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050a18);
+scene.fog = new THREE.FogExp2(0x07122b, 0.016);
+
+const camera = new THREE.PerspectiveCamera(62, width / height, 0.1, 200);
+// كاميرا قريبة خلف السفينة لإحساس قتال 3D قريب ومباشر
+camera.position.set(0, 6.2, 13.5);
+camera.lookAt(0, 0.5, -14);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(width, height);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+sceneContainer.appendChild(renderer.domElement);
+
+// إضاءة المشهد 3D
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
+dirLight.position.set(8, 18, 12);
+scene.add(dirLight);
+
+const stagePointLight = new THREE.PointLight(0x00f2fe, 2.2, 75);
+stagePointLight.position.set(0, 6, -15);
+scene.add(stagePointLight);
+
+// كوكب خلفي ثلاثي الأبعاد يتغير لونه وحلقته مع كل مرحلة
+const bgPlanetGroup = new THREE.Group();
+const planetMat = new THREE.MeshStandardMaterial({
+    color: 0x0284c7,
+    roughness: 0.55,
+    metalness: 0.2,
+    emissive: 0x0369a1,
+    emissiveIntensity: 0.35
+});
+const planetMesh = new THREE.Mesh(new THREE.SphereGeometry(9, 28, 28), planetMat);
+bgPlanetGroup.add(planetMesh);
+
+const ringMat = new THREE.MeshBasicMaterial({
+    color: 0x38bdf8,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.45
+});
+const ringMesh = new THREE.Mesh(new THREE.RingGeometry(11.5, 15.5, 40), ringMat);
+ringMesh.rotation.x = Math.PI * 0.38;
+ringMesh.rotation.y = 0.25;
+bgPlanetGroup.add(ringMesh);
+bgPlanetGroup.position.set(-18, 12, -62);
+scene.add(bgPlanetGroup);
+
+// شبكة فضائية سفلية ثلاثية الأبعاد تعطي إحساس السرعة والعمق
+const gridHelper = new THREE.GridHelper(90, 36, 0x00f2fe, 0x0f2547);
+gridHelper.position.set(0, -4.5, -25);
+scene.add(gridHelper);
+
+// نجوم ثلاثية الأبعاد تندفع نحوك
+const starCount = 420;
+const starGeo = new THREE.BufferGeometry();
+const starPositions = new Float32Array(starCount * 3);
+for (let i = 0; i < starCount; i++) {
+    starPositions[i * 3] = (Math.random() - 0.5) * 90;
+    starPositions[i * 3 + 1] = (Math.random() - 0.5) * 55 + 6;
+    starPositions[i * 3 + 2] = -Math.random() * 110 + 10;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.35, transparent: true, opacity: 0.85 });
+const starField = new THREE.Points(starGeo, starMat);
+scene.add(starField);
+
+// بناء مجسم سفينة اللاعب 3D
+function createPlayerShip3D() {
+    const group = new THREE.Group();
+
+    const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0xf8fafc,
+        metalness: 0.45,
+        roughness: 0.25
+    });
+    const wingMat = new THREE.MeshStandardMaterial({
+        color: 0x0284c7,
+        metalness: 0.5,
+        roughness: 0.3,
+        emissive: 0x00f2fe,
+        emissiveIntensity: 0.25
+    });
+    const cockpitMat = new THREE.MeshStandardMaterial({
+        color: 0x00f2fe,
+        emissive: 0x00f2fe,
+        emissiveIntensity: 0.65,
+        roughness: 0.15
+    });
+
+    // الهيكل الرئيسي
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.65, 2.6, 8), bodyMat);
+    nose.rotation.x = -Math.PI / 2;
+    group.add(nose);
+
+    // قمرة القيادة
+    const cockpit = new THREE.Mesh(new THREE.SphereGeometry(0.36, 14, 14), cockpitMat);
+    cockpit.scale.set(0.85, 0.65, 1.5);
+    cockpit.position.set(0, 0.28, 0.1);
+    group.add(cockpit);
+
+    // الأجنحة الجانبية
+    const wings = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.12, 1.1), wingMat);
+    wings.position.set(0, 0, 0.45);
+    group.add(wings);
+
+    // زعانف طرفية
+    const finGeo = new THREE.BoxGeometry(0.14, 0.65, 0.8);
+    const leftFin = new THREE.Mesh(finGeo, bodyMat);
+    leftFin.position.set(-1.55, 0.2, 0.5);
+    const rightFin = new THREE.Mesh(finGeo, bodyMat);
+    rightFin.position.set(1.55, 0.2, 0.5);
+    group.add(leftFin, rightFin);
+
+    // لهب المحرك
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe });
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.32, 1.1, 10), flameMat);
+    flame.rotation.x = Math.PI / 2;
+    flame.position.set(0, 0, 1.65);
+    group.add(flame);
+
+    // هالة الدرع الواقي 3D
+    const shieldMat = new THREE.MeshBasicMaterial({
+        color: 0x34d399,
+        transparent: true,
+        opacity: 0.26,
+        wireframe: true
+    });
+    const shieldSphere = new THREE.Mesh(new THREE.SphereGeometry(2.1, 18, 18), shieldMat);
+    shieldSphere.visible = false;
+    group.add(shieldSphere);
+
+    group.userData = { flame, shieldSphere };
+    return group;
+}
+
+const playerMesh = createPlayerShip3D();
+playerMesh.position.set(0, 0, 4.5); // موقع قريب للكاميرا والأعداء
+scene.add(playerMesh);
+
+// حالة اللاعب
 const player = {
-    x: width / 2,
-    y: height - 110,
-    radius: 22,
-    speed: 6.5,
+    x: 0,
+    y: 0,
+    z: 4.5,
     hp: 100,
     maxHp: 100,
     lastShot: 0,
-    fireRate: 210,
+    baseFireRate: 220,
     weaponLevel: 1,
     weaponTimer: 0,
-    weaponDuration: 9000,
+    weaponDuration: 10000,
+    rapidTimer: 0,
+    rapidDuration: 9000,
     shieldTimer: 0,
-    shieldDuration: 8000
+    shieldDuration: 9000
 };
 
-let bullets = [];
-let enemyBullets = [];
-let enemies = [];
-let particles = [];
-let stars = [];
-let powerups = [];
-let lastEnemySpawn = 0;
-
-// ضبط أبعاد الشاشة
-function resizeCanvas() {
-    width = window.innerWidth || document.documentElement.clientWidth || 800;
-    height = window.innerHeight || document.documentElement.clientHeight || 600;
-    canvas.width = width;
-    canvas.height = height;
-
-    scaleFactor = Math.min(Math.max(width / 460, 0.8), 1.35);
-    player.radius = 20 * scaleFactor;
-    player.speed = 6.5 * Math.min(scaleFactor, 1.25);
-
-    player.x = Math.max(player.radius + 10, Math.min(width - player.radius - 10, player.x));
-    player.y = Math.max(95, Math.min(height - player.radius - 55, player.y));
-
-    if (stars.length === 0) {
-        initStars();
-    }
+// حدود الحركة 3D بحيث تبقى السفينة واضحة دائماً
+function getBounds3D() {
+    const aspect = width / height;
+    const maxX = Math.max(4.6, Math.min(9.5, 5.8 * aspect));
+    return { minX: -maxX, maxX, minY: -1.8, maxY: 3.4 };
 }
 
-function initStars() {
-    stars = [];
-    const starCount = Math.floor((width * height) / 9000);
-    for (let i = 0; i < Math.max(50, starCount); i++) {
-        stars.push({
-            x: Math.random() * width,
-            y: Math.random() * height,
-            size: Math.random() * 2 + 0.6,
-            speed: Math.random() * 1.8 + 0.4,
-            alpha: Math.random() * 0.7 + 0.3
-        });
-    }
-}
+window.addEventListener('resize', () => {
+    width = window.innerWidth || 800;
+    height = window.innerHeight || 600;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height);
+});
 
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-
-// التحكم بلوحة المفاتيح والماوس واللمس
+// التحكم بلوحة المفاتيح واللمس/الماوس
 const keys = {};
 window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
@@ -327,124 +422,287 @@ window.addEventListener('keyup', (e) => {
 });
 
 let isPointerDown = false;
-canvas.addEventListener('pointerdown', (e) => {
+sceneContainer.addEventListener('pointerdown', (e) => {
     if (gameState !== 'PLAYING') return;
     isPointerDown = true;
-    movePlayerToPointer(e.clientX, e.clientY, e.pointerType === 'touch');
+    movePlayerFromScreen(e.clientX, e.clientY);
 });
 
 window.addEventListener('pointermove', (e) => {
     if (!isPointerDown || gameState !== 'PLAYING') return;
-    movePlayerToPointer(e.clientX, e.clientY, e.pointerType === 'touch');
+    movePlayerFromScreen(e.clientX, e.clientY);
 });
 
 window.addEventListener('pointerup', () => {
     isPointerDown = false;
 });
 
-function movePlayerToPointer(clientX, clientY, isTouch) {
-    const offsetY = isTouch ? 45 * scaleFactor : 0;
-    player.x = Math.max(player.radius + 8, Math.min(width - player.radius - 8, clientX));
-    player.y = Math.max(95, Math.min(height - player.radius - 55, clientY - offsetY));
+function movePlayerFromScreen(clientX, clientY) {
+    const b = getBounds3D();
+    const nx = (clientX / width) * 2 - 1;
+    const ny = -(clientY / height) * 2 + 1;
+    player.x = Math.max(b.minX, Math.min(b.maxX, nx * b.maxX * 1.1));
+    player.y = Math.max(b.minY, Math.min(b.maxY, ny * 2.8 + 0.8));
 }
 
-// إطلاق النار
-function fireBullet(now) {
-    if (now - player.lastShot < player.fireRate) return;
+// القوائم ثلاثية الأبعاد
+let bullets = [];
+let enemyBullets = [];
+let enemies = [];
+let powerups = [];
+let particles = [];
+let lastEnemySpawn = 0;
+
+function clearAllEntities() {
+    bullets.forEach(b => scene.remove(b.mesh));
+    enemyBullets.forEach(b => scene.remove(b.mesh));
+    enemies.forEach(e => {
+        scene.remove(e.mesh);
+        if (e.labelEl) e.labelEl.remove();
+    });
+    powerups.forEach(p => scene.remove(p.mesh));
+    particles.forEach(pt => scene.remove(pt.mesh));
+
+    bullets = [];
+    enemyBullets = [];
+    enemies = [];
+    powerups = [];
+    particles = [];
+    enemyLabelsLayer.innerHTML = '';
+}
+
+// تطبيق أجواء وألوان المرحلة 3D
+function applyStageEnvironment(stageNum) {
+    const cfg = getStageConfig(stageNum);
+    scene.background = new THREE.Color(cfg.bgHex);
+    scene.fog = new THREE.FogExp2(cfg.fogHex, 0.015);
+    stagePointLight.color.setHex(cfg.lightHex);
+    planetMat.color.setHex(cfg.planetHex);
+    planetMat.emissive.setHex(cfg.planetHex);
+    ringMat.color.setHex(cfg.ringHex);
+
+    stageDisplay.textContent = `${stageNum} • ${cfg.label}`;
+    stageDisplay.style.color = cfg.accentCss;
+    updateStageProgressUI();
+}
+
+function updateStageProgressUI() {
+    stageProgressDisplay.textContent = `${enemiesDefeatedInStage} / ${stageTargetCount}`;
+}
+
+// إطلاق نار اللاعب 3D
+function firePlayerBullet(now) {
+    const currentFireRate = player.rapidTimer > now ? player.baseFireRate * 0.52 : player.baseFireRate;
+    if (now - player.lastShot < currentFireRate) return;
     player.lastShot = now;
     playSound('shoot');
 
-    const bSpeed = 11 * Math.min(scaleFactor, 1.25);
-    const bRadius = 4 * scaleFactor;
+    const spawnSingle = (offsetX, vx, colorHex) => {
+        const mesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.11, 0.11, 1.5, 8),
+            new THREE.MeshBasicMaterial({ color: colorHex })
+        );
+        mesh.rotation.x = Math.PI / 2;
+        mesh.position.set(player.x + offsetX, player.y, player.z - 1.4);
+        scene.add(mesh);
+        bullets.push({ mesh, vx, vz: -0.95, radius: 0.45 });
+    };
 
     if (player.weaponLevel === 1) {
-        bullets.push({ x: player.x, y: player.y - player.radius, vx: 0, vy: -bSpeed, r: bRadius, color: '#00f2fe' });
+        spawnSingle(0, 0, 0x00f2fe);
     } else if (player.weaponLevel === 2) {
-        const spread = 12 * scaleFactor;
-        bullets.push({ x: player.x - spread, y: player.y - player.radius * 0.7, vx: 0, vy: -bSpeed, r: bRadius, color: '#38bdf8' });
-        bullets.push({ x: player.x + spread, y: player.y - player.radius * 0.7, vx: 0, vy: -bSpeed, r: bRadius, color: '#38bdf8' });
+        spawnSingle(-0.65, 0, 0x38bdf8);
+        spawnSingle(0.65, 0, 0x38bdf8);
     } else {
-        bullets.push({ x: player.x, y: player.y - player.radius, vx: 0, vy: -bSpeed, r: bRadius * 1.1, color: '#fbbf24' });
-        bullets.push({ x: player.x - 14 * scaleFactor, y: player.y - player.radius * 0.6, vx: -1.6, vy: -bSpeed, r: bRadius, color: '#00f2fe' });
-        bullets.push({ x: player.x + 14 * scaleFactor, y: player.y - player.radius * 0.6, vx: 1.6, vy: -bSpeed, r: bRadius, color: '#00f2fe' });
+        spawnSingle(0, 0, 0xfbbf24);
+        spawnSingle(-0.75, -0.07, 0x00f2fe);
+        spawnSingle(0.75, 0.07, 0x00f2fe);
     }
 }
 
-// توليد الأعداء بأشكال وقوى تتغير حسب المرحلة
-function spawnEnemy(now) {
+// بناء مجسم عدو 3D مختلف حسب النوع والمرحلة
+function createEnemyMesh3D(type, colorHex) {
+    const group = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({
+        color: colorHex,
+        emissive: colorHex,
+        emissiveIntensity: 0.35,
+        metalness: 0.45,
+        roughness: 0.3
+    });
+
+    if (type === 'cruiser') {
+        // طراد مدرع عريض
+        const core = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.75, 1.8), mat);
+        const cannonL = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 1.4, 8), mat);
+        cannonL.rotation.x = Math.PI / 2;
+        cannonL.position.set(-0.85, -0.1, 0.6);
+        const cannonR = cannonL.clone();
+        cannonR.position.x = 0.85;
+        group.add(core, cannonL, cannonR);
+    } else if (type === 'crystal') {
+        // مركبة بلورية دوّارة
+        const oct = new THREE.Mesh(new THREE.OctahedronGeometry(1.15, 0), mat);
+        const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(1.45, 0.08, 8, 24),
+            new THREE.MeshBasicMaterial({ color: 0xffffff })
+        );
+        ring.rotation.x = Math.PI / 2;
+        group.add(oct, ring);
+    } else {
+        // مقاتلة اعتراضية سريعة
+        const body = new THREE.Mesh(new THREE.ConeGeometry(0.85, 2.2, 6), mat);
+        body.rotation.x = Math.PI / 2;
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.12, 0.7), mat);
+        group.add(body, wing);
+    }
+    return group;
+}
+
+// توليد عدو جديد يتمركز على مسافة قريبة ويطلق النار عليك
+function spawnEnemy3D(now) {
+    if (enemiesSpawnedInStage >= stageTargetCount) return;
+
     const cfg = difficultyConfig[settings.difficulty];
     const stg = getStageConfig(stage);
+    const b = getBounds3D();
     const rand = Math.random();
 
-    let type = 'scout';
-    let radius = 18 * scaleFactor;
-    let baseHp = 1 + Math.floor((stage - 1) * 0.6);
-    let speed = (2.3 + Math.random() * 1.2 + stage * 0.14) * cfg.enemySpeedMult * stg.speedMult * Math.min(scaleFactor, 1.2);
-    let color = stg.colors.scout;
-    let points = 10;
+    let type = 'interceptor';
+    let baseHp = 2 + Math.floor((stage - 1) * 0.8);
+    let radius = 1.25;
+    let points = 20;
 
-    if (stage >= 2 && rand > 0.82) {
-        type = 'striker';
-        radius = 19 * scaleFactor;
-        baseHp = 2 + Math.floor(stage * 0.7);
-        speed *= 0.92;
-        color = stg.colors.striker;
-        points = 25;
-    } else if (rand > 0.72) {
-        type = 'tank';
-        radius = 27 * scaleFactor;
-        baseHp = 3 + Math.floor(stage * 1.1);
-        speed *= 0.65;
-        color = stg.colors.tank;
-        points = 35;
-    } else if (rand > 0.46) {
-        type = 'asteroid';
-        radius = (20 + Math.random() * 10) * scaleFactor;
-        baseHp = 2 + Math.floor((stage - 1) * 0.5);
-        speed *= 0.85;
-        color = stg.colors.asteroid;
-        points = 20;
+    if (rand > 0.7) {
+        type = 'cruiser';
+        baseHp = 4 + Math.floor(stage * 1.2);
+        radius = 1.55;
+        points = 45;
+    } else if (rand > 0.4) {
+        type = 'crystal';
+        baseHp = 3 + Math.floor(stage * 0.9);
+        radius = 1.35;
+        points = 30;
     }
 
     const hp = Math.max(1, Math.ceil(baseHp * cfg.enemyHpMult * stg.hpMult));
+    const colorHex = stg.enemyColors[type];
+    const mesh = createEnemyMesh3D(type, colorHex);
+
+    const spawnX = (Math.random() * 2 - 1) * (b.maxX * 0.85);
+    const spawnY = (Math.random() * 2 - 1) * 1.6 + 0.8;
+    // يبدأ قريباً نسبياً (-28) ويتوقف للاشتباك القريب عند مسافة (-8 إلى -13) أمام السفينة
+    mesh.position.set(spawnX, spawnY, -28);
+    scene.add(mesh);
+
+    // إنشاء شريط حياة العدو فوقه على الشاشة
+    const labelEl = document.createElement('div');
+    labelEl.className = 'enemy-hp-tag';
+    labelEl.innerHTML = `
+        <span class="enemy-hp-num">${hp}</span>
+        <div class="enemy-hp-track">
+            <div class="enemy-hp-fill" style="width: 100%;"></div>
+        </div>
+    `;
+    enemyLabelsLayer.appendChild(labelEl);
+
+    enemiesSpawnedInStage++;
 
     enemies.push({
-        x: Math.random() * (width - radius * 2 - 24) + radius + 12,
-        y: -radius - 16,
-        radius,
+        mesh,
+        labelEl,
+        type,
         hp,
         maxHp: hp,
-        speed,
-        type,
-        color,
+        radius,
         points,
-        angle: 0,
-        spin: (Math.random() - 0.5) * 0.06,
-        swayAmp: type === 'striker' ? (24 + Math.random() * 18) * scaleFactor : 0,
-        swayFreq: 0.003 + Math.random() * 0.002,
-        phase: Math.random() * Math.PI * 2,
-        lastEnemyShot: now + Math.random() * 900
+        colorHex,
+        engageZ: -7.5 - Math.random() * 5.5, // مسافة قتال قريبة جداً وواضحة
+        approachSpeed: 0.24 * cfg.enemySpeedMult * stg.speedMult,
+        strafeSpeed: (0.035 + Math.random() * 0.025) * stg.speedMult,
+        strafeDir: Math.random() < 0.5 ? 1 : -1,
+        lastShot: now + 600 + Math.random() * 700,
+        fireInterval: stg.enemyFireInterval * cfg.fireCooldownMult
     });
 }
 
-// توليد الجزيئات البصرية
-function createExplosion(x, y, color, count = 14) {
+// إطلاق نار العدو نحو اللاعب في الفضاء ثلاثي الأبعاد
+function fireEnemyBullet3D(e) {
+    playSound('enemyShoot');
+
+    const startPos = e.mesh.position.clone();
+    startPos.z += 1.0;
+
+    const targetPos = new THREE.Vector3(player.x, player.y, player.z);
+    const dir = targetPos.sub(startPos).normalize();
+    const speed = 0.34 + stage * 0.025;
+
+    const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.24, 10, 10),
+        new THREE.MeshBasicMaterial({ color: 0xff3b5c })
+    );
+    mesh.position.copy(startPos);
+    scene.add(mesh);
+
+    enemyBullets.push({
+        mesh,
+        vx: dir.x * speed,
+        vy: dir.y * speed,
+        vz: dir.z * speed,
+        radius: 0.32
+    });
+}
+
+// توليد هدية ثلاثية الأبعاد عند تدمير عدو
+function spawnPowerup3D(pos) {
+    const r = Math.random();
+    let kind = 'weapon';
+    let colorHex = 0xfbbf24;
+    if (r < 0.28) {
+        kind = 'health';
+        colorHex = 0x10b981;
+    } else if (r < 0.54) {
+        kind = 'shield';
+        colorHex = 0x34d399;
+    } else if (r < 0.78) {
+        kind = 'rapid';
+        colorHex = 0xf43f5e;
+    }
+
+    const mesh = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.62, 0),
+        new THREE.MeshStandardMaterial({
+            color: colorHex,
+            emissive: colorHex,
+            emissiveIntensity: 0.65,
+            roughness: 0.2
+        })
+    );
+    mesh.position.copy(pos);
+    scene.add(mesh);
+
+    powerups.push({ mesh, kind, radius: 0.95 });
+}
+
+// انفجار ثلاثي الأبعاد
+function createExplosion3D(pos, colorHex, count = 14) {
+    const geo = new THREE.BoxGeometry(0.24, 0.24, 0.24);
+    const mat = new THREE.MeshBasicMaterial({ color: colorHex });
     for (let i = 0; i < count; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 4.5 + 1;
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(pos);
+        scene.add(mesh);
         particles.push({
-            x,
-            y,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
-            alpha: 1,
-            size: (Math.random() * 3.5 + 1.5) * scaleFactor,
-            color
+            mesh,
+            vx: (Math.random() - 0.5) * 0.45,
+            vy: (Math.random() - 0.5) * 0.45,
+            vz: (Math.random() - 0.5) * 0.45,
+            life: 1.0
         });
     }
 }
 
-// تحديث واجهة المؤقتات العلوية للتعزيزات
+// تحديث شريط مؤقتات الهدايا النشطة أعلى الشاشة
 function updateBuffsUI(now) {
     const buffs = [];
 
@@ -453,9 +711,20 @@ function updateBuffsUI(now) {
         const pct = Math.max(0, Math.min(100, (rem / player.weaponDuration) * 100));
         buffs.push({
             label: player.weaponLevel === 3 ? '⚡ سلاح ثلاثي' : '⚡ سلاح مزدوج',
-            sec: (rem / 1000).toFixed(1) + 's',
+            sec: (rem / 1000).toFixed(1) + 'ث',
             pct,
-            color: player.weaponLevel === 3 ? '#fbbf24' : '#38bdf8'
+            color: '#fbbf24'
+        });
+    }
+
+    if (player.rapidTimer > now) {
+        const rem = player.rapidTimer - now;
+        const pct = Math.max(0, Math.min(100, (rem / player.rapidDuration) * 100));
+        buffs.push({
+            label: '🔥 إطلاق سريع',
+            sec: (rem / 1000).toFixed(1) + 'ث',
+            pct,
+            color: '#f43f5e'
         });
     }
 
@@ -463,8 +732,8 @@ function updateBuffsUI(now) {
         const rem = player.shieldTimer - now;
         const pct = Math.max(0, Math.min(100, (rem / player.shieldDuration) * 100));
         buffs.push({
-            label: '🛡️ درع طاقة',
-            sec: (rem / 1000).toFixed(1) + 's',
+            label: '🛡️ درع حماية',
+            sec: (rem / 1000).toFixed(1) + 'ث',
             pct,
             color: '#34d399'
         });
@@ -478,7 +747,7 @@ function updateBuffsUI(now) {
 
     activeBuffsEl.classList.remove('hidden');
     activeBuffsEl.innerHTML = buffs.map(b => `
-        <div class="buff-pill" style="border-color: ${b.color}55;">
+        <div class="buff-pill" style="border-color: ${b.color}66;">
             <div class="buff-header">
                 <span>${b.label}</span>
                 <span class="buff-time">${b.sec}</span>
@@ -490,59 +759,90 @@ function updateBuffsUI(now) {
     `).join('');
 }
 
+// تحديث موقع شريط حياة كل عدو 3D على الشاشة
+function updateEnemyLabels3D() {
+    const tempV = new THREE.Vector3();
+    for (let e of enemies) {
+        tempV.copy(e.mesh.position);
+        tempV.y += e.radius * 0.95;
+        tempV.project(camera);
+
+        if (tempV.z > 1) {
+            e.labelEl.style.display = 'none';
+            continue;
+        }
+
+        const x = (tempV.x * 0.5 + 0.5) * width;
+        const y = (-(tempV.y * 0.5) + 0.5) * height;
+        e.labelEl.style.display = 'flex';
+        e.labelEl.style.left = `${x}px`;
+        e.labelEl.style.top = `${y}px`;
+    }
+}
+
 // تحديث منطق اللعبة
 function update(now) {
-    const stg = getStageConfig(stage);
-
-    // تحريك النجوم في الخلفية
-    for (let s of stars) {
-        const speedMult = gameState === 'PLAYING' ? 1.5 * stg.starSpeedMult : 0.6;
-        s.y += s.speed * speedMult;
-        if (s.y > height) {
-            s.y = 0;
-            s.x = Math.random() * width;
+    // تحريك النجوم والكوكب والشبكة لإعطاء حركة فضاء 3D مستمرة
+    const posArr = starField.geometry.attributes.position.array;
+    const starSpeed = gameState === 'PLAYING' ? 0.55 + stage * 0.08 : 0.18;
+    for (let i = 0; i < starCount; i++) {
+        posArr[i * 3 + 2] += starSpeed;
+        if (posArr[i * 3 + 2] > 14) {
+            posArr[i * 3 + 2] = -105;
         }
     }
+    starField.geometry.attributes.position.needsUpdate = true;
+    bgPlanetGroup.rotation.y += 0.002;
+    gridHelper.position.z += gameState === 'PLAYING' ? 0.25 : 0.08;
+    if (gridHelper.position.z > -15) gridHelper.position.z = -25;
 
     if (gameState !== 'PLAYING') return;
 
-    // حركة اللاعب عبر لوحة المفاتيح
-    if (keys['ArrowLeft'] || keys['KeyA']) player.x -= player.speed;
-    if (keys['ArrowRight'] || keys['KeyD']) player.x += player.speed;
-    if (keys['ArrowUp'] || keys['KeyW']) player.y -= player.speed;
-    if (keys['ArrowDown'] || keys['KeyS']) player.y += player.speed;
+    // حركة سفينة اللاعب عبر لوحة المفاتيح
+    const b = getBounds3D();
+    const moveStep = 0.19;
+    let tiltZ = 0;
+    if (keys['ArrowLeft'] || keys['KeyA']) { player.x -= moveStep; tiltZ = 0.35; }
+    if (keys['ArrowRight'] || keys['KeyD']) { player.x += moveStep; tiltZ = -0.35; }
+    if (keys['ArrowUp'] || keys['KeyW']) player.y += moveStep * 0.85;
+    if (keys['ArrowDown'] || keys['KeyS']) player.y -= moveStep * 0.85;
 
-    player.x = Math.max(player.radius + 8, Math.min(width - player.radius - 8, player.x));
-    player.y = Math.max(95, Math.min(height - player.radius - 55, player.y));
+    player.x = Math.max(b.minX, Math.min(b.maxX, player.x));
+    player.y = Math.max(b.minY, Math.min(b.maxY, player.y));
+
+    playerMesh.position.lerp(new THREE.Vector3(player.x, player.y, player.z), 0.28);
+    playerMesh.rotation.z += (tiltZ - playerMesh.rotation.z) * 0.18;
+    playerMesh.userData.flame.scale.y = 0.85 + Math.random() * 0.45;
+    playerMesh.userData.shieldSphere.visible = player.shieldTimer > now;
+    if (playerMesh.userData.shieldSphere.visible) {
+        playerMesh.userData.shieldSphere.rotation.y += 0.04;
+    }
 
     // إطلاق النار
     if (settings.autoFire || keys['Space'] || isPointerDown) {
-        fireBullet(now);
+        firePlayerBullet(now);
     }
 
-    // انتهاء مؤقتات التعزيزات
-    if (player.weaponLevel > 1 && now > player.weaponTimer) {
-        player.weaponLevel = 1;
-    }
-    if (player.shieldTimer > 0 && now > player.shieldTimer) {
-        player.shieldTimer = 0;
-    }
+    // انتهاء مؤقتات الهدايا
+    if (player.weaponLevel > 1 && now > player.weaponTimer) player.weaponLevel = 1;
+    if (player.rapidTimer > 0 && now > player.rapidTimer) player.rapidTimer = 0;
+    if (player.shieldTimer > 0 && now > player.shieldTimer) player.shieldTimer = 0;
     updateBuffsUI(now);
 
-    // توليد الأعداء
+    // توليد أعداء المرحلة الحالية
     const cfg = difficultyConfig[settings.difficulty];
-    const currentSpawnInterval = Math.max(300, cfg.spawnRate * stg.spawnMult);
-    if (now - lastEnemySpawn > currentSpawnInterval) {
-        spawnEnemy(now);
+    if (enemiesSpawnedInStage < stageTargetCount && enemies.length < 5 && now - lastEnemySpawn > cfg.spawnRate) {
+        spawnEnemy3D(now);
         lastEnemySpawn = now;
     }
 
     // تحديث رصاص اللاعب
     for (let i = bullets.length - 1; i >= 0; i--) {
-        const b = bullets[i];
-        b.x += b.vx;
-        b.y += b.vy;
-        if (b.y < -20 || b.x < -20 || b.x > width + 20) {
+        const bl = bullets[i];
+        bl.mesh.position.x += bl.vx;
+        bl.mesh.position.z += bl.vz;
+        if (bl.mesh.position.z < -42) {
+            scene.remove(bl.mesh);
             bullets.splice(i, 1);
         }
     }
@@ -550,103 +850,118 @@ function update(now) {
     // تحديث طلقات الأعداء
     for (let i = enemyBullets.length - 1; i >= 0; i--) {
         const eb = enemyBullets[i];
-        eb.x += eb.vx;
-        eb.y += eb.vy;
+        eb.mesh.position.x += eb.vx;
+        eb.mesh.position.y += eb.vy;
+        eb.mesh.position.z += eb.vz;
 
-        if (Math.hypot(player.x - eb.x, player.y - eb.y) < player.radius + eb.r - 2) {
+        const dist = eb.mesh.position.distanceTo(playerMesh.position);
+        if (dist < 1.25 + eb.radius) {
+            createExplosion3D(eb.mesh.position, 0xff3b5c, 8);
+            scene.remove(eb.mesh);
             enemyBullets.splice(i, 1);
             playSound('hit');
-            createExplosion(eb.x, eb.y, eb.color, 8);
-            damagePlayer(12);
+            damagePlayer(14);
             continue;
         }
 
-        if (eb.y > height + 25 || eb.x < -25 || eb.x > width + 25) {
+        if (eb.mesh.position.z > 14 || eb.mesh.position.z < -45) {
+            scene.remove(eb.mesh);
             enemyBullets.splice(i, 1);
         }
     }
 
-    // تحديث المساعدات (Powerups)
+    // تحديث الهدايا 3D
     for (let i = powerups.length - 1; i >= 0; i--) {
         const p = powerups[i];
-        p.y += 2.4;
-        const dist = Math.hypot(player.x - p.x, player.y - p.y);
-        if (dist < player.radius + p.radius) {
+        p.mesh.position.z += 0.22;
+        p.mesh.rotation.y += 0.06;
+
+        if (p.mesh.position.distanceTo(playerMesh.position) < 1.55 + p.radius) {
             playSound('powerup');
             if (p.kind === 'health') {
-                player.hp = Math.min(player.maxHp, player.hp + 30);
+                player.hp = Math.min(player.maxHp, player.hp + 35);
                 updateHealthUI();
             } else if (p.kind === 'shield') {
                 player.shieldTimer = now + player.shieldDuration;
+            } else if (p.kind === 'rapid') {
+                player.rapidTimer = now + player.rapidDuration;
             } else {
                 player.weaponLevel = Math.min(3, player.weaponLevel + 1);
                 player.weaponTimer = now + player.weaponDuration;
             }
             updateBuffsUI(now);
-            createExplosion(p.x, p.y, '#10b981', 10);
+            createExplosion3D(p.mesh.position, 0x34d399, 10);
+            scene.remove(p.mesh);
             powerups.splice(i, 1);
             continue;
         }
-        if (p.y > height + 30) powerups.splice(i, 1);
+
+        if (p.mesh.position.z > 13) {
+            scene.remove(p.mesh);
+            powerups.splice(i, 1);
+        }
     }
 
-    // تحديث الأعداء والتصادم
+    // تحديث الأعداء والاشتباك القريب
     for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
-        e.y += e.speed;
-        e.angle += e.spin;
 
-        if (e.swayAmp > 0) {
-            e.x += Math.cos(now * e.swayFreq + e.phase) * 1.4;
-            e.x = Math.max(e.radius + 12, Math.min(width - e.radius - 12, e.x));
+        // التقدم حتى مسافة القتال القريبة ثم المناورة أمام اللاعب
+        if (e.mesh.position.z < e.engageZ) {
+            e.mesh.position.z += e.approachSpeed;
+        } else {
+            e.mesh.position.x += e.strafeSpeed * e.strafeDir;
+            if (e.mesh.position.x > b.maxX * 0.85) e.strafeDir = -1;
+            if (e.mesh.position.x < -b.maxX * 0.85) e.strafeDir = 1;
         }
 
-        // إطلاق نار من بعض الأعداء في المراحل المتقدمة
-        if (stg.enemyFireChance > 0 && (e.type === 'tank' || e.type === 'striker') && e.y > 40 && e.y < height * 0.65) {
-            if (now - e.lastEnemyShot > 1750) {
-                e.lastEnemyShot = now;
-                if (Math.random() < stg.enemyFireChance) {
-                    const ang = Math.atan2(player.y - e.y, player.x - e.x);
-                    const spd = 4.2 * Math.min(scaleFactor, 1.2);
-                    enemyBullets.push({
-                        x: e.x,
-                        y: e.y + e.radius * 0.6,
-                        vx: Math.cos(ang) * spd,
-                        vy: Math.sin(ang) * spd,
-                        r: 4.5 * scaleFactor,
-                        color: stg.accentColor
-                    });
-                }
-            }
+        if (e.type === 'crystal') {
+            e.mesh.rotation.y += 0.04;
+        } else {
+            e.mesh.lookAt(playerMesh.position);
         }
 
-        // تصادم الرصاص مع العدو
+        // إطلاق نار العدو عليك
+        if (e.mesh.position.z >= e.engageZ - 3 && now - e.lastShot > e.fireInterval) {
+            e.lastShot = now;
+            fireEnemyBullet3D(e);
+        }
+
+        // تصادم رصاص اللاعب مع العدو
         let destroyed = false;
         for (let j = bullets.length - 1; j >= 0; j--) {
-            const b = bullets[j];
-            if (Math.hypot(e.x - b.x, e.y - b.y) < e.radius + b.r) {
+            const bl = bullets[j];
+            if (e.mesh.position.distanceTo(bl.mesh.position) < e.radius + bl.radius) {
+                scene.remove(bl.mesh);
                 bullets.splice(j, 1);
                 e.hp--;
-                createExplosion(b.x, b.y, '#ffffff', 4);
+                createExplosion3D(bl.mesh.position, 0xffffff, 4);
+
+                // تحديث رقم وشريط حياة العدو
+                const numEl = e.labelEl.querySelector('.enemy-hp-num');
+                const fillEl = e.labelEl.querySelector('.enemy-hp-fill');
+                if (numEl) numEl.textContent = Math.max(0, e.hp);
+                if (fillEl) {
+                    const pct = Math.max(0, (e.hp / e.maxHp) * 100);
+                    fillEl.style.width = `${pct}%`;
+                    fillEl.style.background = pct > 50 ? '#22c55e' : (pct > 25 ? '#f59e0b' : '#ef4444');
+                }
 
                 if (e.hp <= 0) {
                     playSound('explosion');
-                    createExplosion(e.x, e.y, e.color, 16);
+                    createExplosion3D(e.mesh.position, e.colorHex, 16);
                     score += e.points;
                     scoreDisplay.textContent = score;
-                    syncStage(now, true);
+                    enemiesDefeatedInStage++;
+                    updateStageProgressUI();
 
-                    if (Math.random() < 0.18) {
-                        const rKind = Math.random();
-                        const kind = rKind < 0.36 ? 'health' : (rKind < 0.68 ? 'weapon' : 'shield');
-                        powerups.push({
-                            x: e.x,
-                            y: e.y,
-                            radius: 13 * scaleFactor,
-                            kind
-                        });
+                    // فرصة إسقاط هدية تقوّيك
+                    if (Math.random() < 0.34) {
+                        spawnPowerup3D(e.mesh.position);
                     }
 
+                    scene.remove(e.mesh);
+                    e.labelEl.remove();
                     enemies.splice(i, 1);
                     destroyed = true;
                     break;
@@ -654,28 +969,27 @@ function update(now) {
             }
         }
         if (destroyed) continue;
+    }
 
-        // تصادم العدو مع اللاعب
-        if (Math.hypot(player.x - e.x, player.y - e.y) < player.radius + e.radius - 4) {
-            playSound('hit');
-            createExplosion(e.x, e.y, '#f43f5e', 18);
-            enemies.splice(i, 1);
-            damagePlayer(25);
-            continue;
-        }
-
-        if (e.y > height + e.radius + 24) {
-            enemies.splice(i, 1);
+    // تحديث الجزيئات 3D
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const pt = particles[i];
+        pt.mesh.position.x += pt.vx;
+        pt.mesh.position.y += pt.vy;
+        pt.mesh.position.z += pt.vz;
+        pt.life -= 0.035;
+        pt.mesh.scale.setScalar(Math.max(0.01, pt.life));
+        if (pt.life <= 0) {
+            scene.remove(pt.mesh);
+            particles.splice(i, 1);
         }
     }
 
-    // تحديث الجزيئات
-    for (let i = particles.length - 1; i >= 0; i--) {
-        const pt = particles[i];
-        pt.x += pt.vx;
-        pt.y += pt.vy;
-        pt.alpha -= 0.028;
-        if (pt.alpha <= 0) particles.splice(i, 1);
+    updateEnemyLabels3D();
+
+    // التحقق من إنهاء المرحلة الحالية وعرض زر "التالي"
+    if (enemiesDefeatedInStage >= stageTargetCount && enemies.length === 0) {
+        openStageCompleteScreen();
     }
 }
 
@@ -700,237 +1014,66 @@ function updateHealthUI() {
     }
 }
 
-// رسم عداد حياة العدو فوقه مباشرة
-function drawEnemyHealthBar(e) {
-    const barW = Math.max(30 * scaleFactor, e.radius * 1.65);
-    const barH = 5 * scaleFactor;
-    const x = e.x - barW / 2;
-    const y = e.y - e.radius - 15 * scaleFactor;
-    const pct = Math.max(0, Math.min(1, e.hp / e.maxHp));
+// شاشة إنهاء المرحلة مع زر الانتقال للمرحلة التالية
+function openStageCompleteScreen() {
+    gameState = 'STAGE_COMPLETE';
+    playSound('stageClear');
 
-    ctx.save();
-    ctx.fillStyle = 'rgba(4, 7, 17, 0.78)';
-    ctx.fillRect(x - 1, y - 1, barW + 2, barH + 2);
+    // تنظيف أي طلقات متبقية
+    bullets.forEach(b => scene.remove(b.mesh));
+    enemyBullets.forEach(b => scene.remove(b.mesh));
+    bullets = [];
+    enemyBullets = [];
 
-    ctx.fillStyle = pct > 0.5 ? '#22c55e' : (pct > 0.25 ? '#f59e0b' : '#ef4444');
-    ctx.fillRect(x, y, barW * pct, barH);
+    const bonus = stage * 150;
+    score += bonus;
+    scoreDisplay.textContent = score;
 
-    ctx.font = `bold ${Math.max(10, Math.round(10.5 * scaleFactor))}px Cairo`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(`${e.hp}`, e.x, y - 2);
-    ctx.restore();
+    const nextCfg = getStageConfig(stage + 1);
+    stageCompleteBadge.textContent = `تم إكمال المرحلة ${stage}`;
+    stageCompleteTitle.textContent = `أنهيت المرحلة ${stage} بنجاح 🎉`;
+    stageCompleteDesc.textContent = `المرحلة القادمة (${nextCfg.label}): ${nextCfg.desc}`;
+    stageScoreValue.textContent = score;
+    stageBonusValue.textContent = `+${bonus}`;
+    nextStageBtn.textContent = `التالي ⬅️ المرحلة ${stage + 1}`;
+
+    stageCompleteModal.classList.remove('hidden');
 }
 
-// رسم العناصر
-function draw(now) {
-    const stg = getStageConfig(stage);
+function startStage(stageNum) {
+    const now = performance.now();
+    stage = stageNum;
+    const cfg = getStageConfig(stage);
+    stageTargetCount = cfg.targetCount;
+    enemiesSpawnedInStage = 0;
+    enemiesDefeatedInStage = 0;
+    lastEnemySpawn = now - 500;
 
-    // خلفية متدرجة حسب المرحلة
-    const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, stg.bgTop);
-    grad.addColorStop(1, stg.bgBottom);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
+    // تعبئة جزء من الدرع عند بداية مرحلة جديدة
+    player.hp = Math.min(player.maxHp, player.hp + 25);
+    updateHealthUI();
+    applyStageEnvironment(stage);
 
-    // توهج سديمي خفيف يعطي طابع كل مرحلة
-    const neb = ctx.createRadialGradient(width * 0.5, height * 0.35, 20, width * 0.5, height * 0.35, Math.max(width, height) * 0.65);
-    neb.addColorStop(0, stg.nebulaColor);
-    neb.addColorStop(1, 'transparent');
-    ctx.fillStyle = neb;
-    ctx.fillRect(0, 0, width, height);
-
-    // النجوم
-    for (let s of stars) {
-        ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha})`;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    if (gameState === 'START') return;
-
-    // رسم المساعدات
-    for (let p of powerups) {
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        const pColor = p.kind === 'health' ? '#10b981' : (p.kind === 'shield' ? '#34d399' : '#fbbf24');
-        const pIcon = p.kind === 'health' ? '+' : (p.kind === 'shield' ? '🛡️' : '⚡');
-        ctx.fillStyle = pColor;
-        ctx.shadowBlur = 12;
-        ctx.shadowColor = pColor;
-        ctx.beginPath();
-        ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#040914';
-        ctx.font = `bold ${Math.round(13 * scaleFactor)}px Cairo`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(pIcon, 0, 1);
-        ctx.restore();
-    }
-
-    // رسم رصاص اللاعب
-    for (let b of bullets) {
-        ctx.save();
-        ctx.fillStyle = b.color;
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = b.color;
-        ctx.beginPath();
-        ctx.ellipse(b.x, b.y, b.r * 0.7, b.r * 2.2, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-
-    // رسم طلقات الأعداء
-    for (let eb of enemyBullets) {
-        ctx.save();
-        ctx.fillStyle = eb.color;
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = eb.color;
-        ctx.beginPath();
-        ctx.arc(eb.x, eb.y, eb.r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-
-    // رسم المركبة الفضائية للاعب
-    ctx.save();
-    ctx.translate(player.x, player.y);
-
-    // هالة الدرع النشط
-    if (player.shieldTimer > now) {
-        ctx.strokeStyle = '#34d399';
-        ctx.lineWidth = 2.5;
-        ctx.shadowBlur = 14;
-        ctx.shadowColor = '#34d399';
-        ctx.beginPath();
-        ctx.arc(0, 0, player.radius * 1.45, 0, Math.PI * 2);
-        ctx.stroke();
-    }
-
-    // لهب المحرك
-    const flameHeight = (12 + Math.random() * 8) * scaleFactor;
-    ctx.fillStyle = stg.accentColor;
-    ctx.beginPath();
-    ctx.moveTo(-player.radius * 0.35, player.radius * 0.7);
-    ctx.lineTo(0, player.radius * 0.7 + flameHeight);
-    ctx.lineTo(player.radius * 0.35, player.radius * 0.7);
-    ctx.closePath();
-    ctx.fill();
-
-    // جسم المركبة
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = '#00f2fe';
-    ctx.fillStyle = '#f8fafc';
-    ctx.beginPath();
-    ctx.moveTo(0, -player.radius * 1.15);
-    ctx.lineTo(player.radius * 0.95, player.radius * 0.85);
-    ctx.lineTo(0, player.radius * 0.5);
-    ctx.lineTo(-player.radius * 0.95, player.radius * 0.85);
-    ctx.closePath();
-    ctx.fill();
-
-    // قمرة القيادة
-    ctx.fillStyle = '#0284c7';
-    ctx.beginPath();
-    ctx.ellipse(0, -player.radius * 0.1, player.radius * 0.28, player.radius * 0.45, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // رسم الأعداء وعدّاد حياة كل عدو فوقه
-    for (let e of enemies) {
-        drawEnemyHealthBar(e);
-
-        ctx.save();
-        ctx.translate(e.x, e.y);
-        ctx.rotate(e.angle);
-        ctx.shadowBlur = 12;
-        ctx.shadowColor = e.color;
-        ctx.fillStyle = e.color;
-
-        if (e.type === 'asteroid') {
-            ctx.beginPath();
-            const sides = 7;
-            for (let k = 0; k < sides; k++) {
-                const ang = (k / sides) * Math.PI * 2;
-                const rad = e.radius * (k % 2 === 0 ? 1 : 0.78);
-                if (k === 0) ctx.moveTo(Math.cos(ang) * rad, Math.sin(ang) * rad);
-                else ctx.lineTo(Math.cos(ang) * rad, Math.sin(ang) * rad);
-            }
-            ctx.closePath();
-            ctx.fill();
-        } else if (e.type === 'tank') {
-            ctx.beginPath();
-            ctx.moveTo(0, e.radius);
-            ctx.lineTo(e.radius, 0);
-            ctx.lineTo(e.radius * 0.6, -e.radius);
-            ctx.lineTo(-e.radius * 0.6, -e.radius);
-            ctx.lineTo(-e.radius, 0);
-            ctx.closePath();
-            ctx.fill();
-        } else if (e.type === 'striker') {
-            ctx.beginPath();
-            ctx.moveTo(0, e.radius * 1.15);
-            ctx.lineTo(e.radius * 0.95, -e.radius * 0.55);
-            ctx.lineTo(0, -e.radius * 0.95);
-            ctx.lineTo(-e.radius * 0.95, -e.radius * 0.55);
-            ctx.closePath();
-            ctx.fill();
-        } else {
-            ctx.beginPath();
-            ctx.moveTo(0, e.radius * 1.1);
-            ctx.lineTo(e.radius * 0.9, -e.radius * 0.8);
-            ctx.lineTo(0, -e.radius * 0.4);
-            ctx.lineTo(-e.radius * 0.9, -e.radius * 0.8);
-            ctx.closePath();
-            ctx.fill();
-        }
-        ctx.restore();
-    }
-
-    // رسم الجزيئات
-    for (let pt of particles) {
-        ctx.save();
-        ctx.globalAlpha = Math.max(0, pt.alpha);
-        ctx.fillStyle = pt.color;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
+    stageCompleteModal.classList.add('hidden');
+    gameState = 'PLAYING';
 }
 
-// حلقة التشغيل الرئيسية
-function gameLoop(now) {
-    update(now);
-    draw(now);
-    requestAnimationFrame(gameLoop);
-}
-
-// التحكم بحالات اللعبة والواجهة
 function startGame() {
     initAudio();
     const now = performance.now();
+    clearAllEntities();
+
     score = 0;
-    stage = 1;
     player.hp = player.maxHp;
     player.weaponLevel = 1;
     player.weaponTimer = 0;
+    player.rapidTimer = 0;
     player.shieldTimer = 0;
-    player.x = width / 2;
-    player.y = height - 110;
-    bullets = [];
-    enemyBullets = [];
-    enemies = [];
-    particles = [];
-    powerups = [];
-    lastEnemySpawn = now;
+    player.x = 0;
+    player.y = 0;
+    playerMesh.position.set(0, 0, player.z);
 
     scoreDisplay.textContent = '0';
-    syncStage(now, false);
     updateHealthUI();
     updateBuffsUI(now);
 
@@ -938,10 +1081,10 @@ function startGame() {
     gameOverScreen.classList.add('hidden');
     settingsModal.classList.add('hidden');
     aboutModal.classList.add('hidden');
+    stageCompleteModal.classList.add('hidden');
     hud.classList.remove('hidden');
 
-    gameState = 'PLAYING';
-    showStageBanner(getStageConfig(1));
+    startStage(1);
 }
 
 function endGame() {
@@ -954,7 +1097,7 @@ function endGame() {
     if (score > highScore) {
         highScore = score;
         try {
-            localStorage.setItem('abdcode_space_highscore', String(highScore));
+            localStorage.setItem('abdcode_space3d_highscore', String(highScore));
         } catch (e) {}
     }
     highScoreStart.textContent = highScore;
@@ -964,10 +1107,11 @@ function endGame() {
 function shiftTimersOnResume(deltaMs) {
     if (deltaMs <= 0) return;
     if (player.weaponTimer > 0) player.weaponTimer += deltaMs;
+    if (player.rapidTimer > 0) player.rapidTimer += deltaMs;
     if (player.shieldTimer > 0) player.shieldTimer += deltaMs;
     if (lastEnemySpawn > 0) lastEnemySpawn += deltaMs;
     for (let e of enemies) {
-        if (e.lastEnemyShot > 0) e.lastEnemyShot += deltaMs;
+        if (e.lastShot > 0) e.lastShot += deltaMs;
     }
 }
 
@@ -985,15 +1129,17 @@ function togglePauseSettings() {
     }
 }
 
-// ربط الأحداث بالأزرار
+// ربط الأزرار
 startBtn.addEventListener('click', startGame);
 restartBtn.addEventListener('click', startGame);
 restartFromPauseBtn.addEventListener('click', startGame);
+nextStageBtn.addEventListener('click', () => startStage(stage + 1));
 
 homeBtn.addEventListener('click', () => {
+    clearAllEntities();
     gameOverScreen.classList.add('hidden');
+    stageCompleteModal.classList.add('hidden');
     hud.classList.add('hidden');
-    stageBanner.classList.add('hidden');
     startScreen.classList.remove('hidden');
     gameState = 'START';
 });
@@ -1050,5 +1196,11 @@ diffButtons.forEach((btn) => {
     });
 });
 
-// تشغيل الحلقة
-requestAnimationFrame(gameLoop);
+// حلقة الرسم الرئيسية 3D
+function animate(now) {
+    requestAnimationFrame(animate);
+    update(now);
+    renderer.render(scene, camera);
+}
+
+requestAnimationFrame(animate);
